@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "@sitblueprint/pipeline-construct": "^0.1.1",
-    "@sitblueprint/website-construct": "^0.1.1",
+    "@sitblueprint/website-construct": "^0.1.2",
     "@types/jest": "^29.5.14",
     "@types/node": "22.7.9",
     "aws-cdk": "2.1024.0",
