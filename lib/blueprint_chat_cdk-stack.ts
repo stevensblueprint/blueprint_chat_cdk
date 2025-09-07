@@ -29,7 +29,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         removalPolicy: cdk.RemovalPolicy.RETAIN,
         pointInTimeRecovery: true,
         encryption: dynamodb.TableEncryption.AWS_MANAGED,
-      }
+      },
     );
 
     this.transactionsTable = new dynamodb.Table(
@@ -49,7 +49,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         removalPolicy: cdk.RemovalPolicy.RETAIN,
         pointInTimeRecovery: true,
         encryption: dynamodb.TableEncryption.AWS_MANAGED,
-      }
+      },
     );
 
     this.transactionsTable.addGlobalSecondaryIndex({
@@ -85,7 +85,12 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_10,
         handler: "main.handler",
         code: lambda.Code.fromAsset(
-          path.join(__dirname, "..", "functions", "inference-authorizer-lambda")
+          path.join(
+            __dirname,
+            "..",
+            "functions",
+            "inference-authorizer-lambda",
+          ),
         ),
         timeout: cdk.Duration.seconds(30),
         memorySize: 512,
@@ -93,7 +98,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
           MONTHLY_USAGE_TABLE: this.monthlyUsageTable.tableName,
           TRANSACTIONS_TABLE: this.transactionsTable.tableName,
         },
-      }
+      },
     );
 
     this.monthlyUsageTable.grantReadWriteData(inferenceAuthorizerFn);

@@ -8,7 +8,9 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk"
+    "cdk": "cdk",
+    "format:check": "prettier --check .",
+    "format:write": "prettier --write ."
   },
   "devDependencies": {
     "@sitblueprint/website-construct": "^0.1.1",
