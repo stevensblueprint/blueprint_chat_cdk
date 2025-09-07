@@ -4,11 +4,15 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as path from "path";
+import * as website from "@sitblueprint/website-construct";
 import { Construct } from "constructs";
 
 export class BlueprintChatCdkStack extends cdk.Stack {
   public readonly monthlyUsageTable: dynamodb.Table;
   public readonly transactionsTable: dynamodb.Table;
+  private readonly projectName = "blueprint-chat";
+  private readonly domainName = "sitblueprint.com";
+  private readonly subdomainName = "chat";
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -118,6 +122,18 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     });
 
     rule.addTarget(new targets.LambdaFunction(inferenceAuthorizerFn));
+
+    const websiteStack = new website.Website(this, "BlueprintChatWebsite", {
+      bucketName: this.projectName,
+      indexFile: "index.html",
+      errorFile: "index.html",
+      notFoundResponsePagePath: "/index.html",
+      domainConfig: {
+        domainName: this.domainName,
+        subdomainName: this.subdomainName,
+        certificateArn: "",
+      },
+    });
 
     new cdk.CfnOutput(this, "MonthlyUsageTableName", {
       value: this.monthlyUsageTable.tableName,
