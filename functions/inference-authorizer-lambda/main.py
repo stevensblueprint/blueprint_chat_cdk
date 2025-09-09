@@ -22,7 +22,7 @@ def _principal_to_user_id(detail: dict) -> str:
     return ui.get("arn") or ui.get("principalId") or "unknown"
 
 
-def handler(event, _context):
+def handler(event, _):
     detail = event.get("detail") or {}
 
     event_time = detail.get("eventTime") or datetime.now(timezone.utc).isoformat()
