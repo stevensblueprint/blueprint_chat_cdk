@@ -1,7 +1,7 @@
 import * as cdk from "aws-cdk-lib";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
-import * as lambdaNode from "aws-cdk-lib/aws-lambda-nodejs";
+import * as iam from "aws-cdk-lib/aws-iam";
 import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as path from "path";
@@ -17,6 +17,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+    /*
     this.monthlyUsageTable = new dynamodb.Table(
       this,
       "BedrockMonthlyUsageTable",
@@ -82,6 +83,19 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       },
       projectionType: dynamodb.ProjectionType.ALL,
     });
+    */
+
+    const monthlyUsageTable = dynamodb.Table.fromTableName(
+      this,
+      "MonthlyUsageTable",
+      "Bedrock-Monthly-Usage"
+    );
+
+    const transactionsTable = dynamodb.Table.fromTableName(
+      this,
+      "TransactionsTable",
+      "Bedrock-Transactions"
+    );
 
     const inferenceAuthorizerFn = new lambda.Function(
       this,
@@ -95,8 +109,8 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         timeout: cdk.Duration.seconds(30),
         memorySize: 512,
         environment: {
-          MONTHLY_USAGE_TABLE: this.monthlyUsageTable.tableName,
-          TRANSACTIONS_TABLE: this.transactionsTable.tableName,
+          MONTHLY_USAGE_TABLE: monthlyUsageTable.tableName,
+          TRANSACTIONS_TABLE: transactionsTable.tableName,
         },
       }
     );
@@ -114,6 +128,20 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         REGION: this.region,
       },
     });
+
+    proxyFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+
+        actions: [
+          "bedrock:InvokeModel",
+
+          "bedrock:InvokeModelWithResponseStream",
+        ],
+
+        resources: ["arn:aws:bedrock:*:*:foundation-model/anthropic.*"],
+      })
+    );
 
     const api = new apigw.RestApi(this, "BedApiGatewayApi", {
       restApiName: "bedrock-gateway-api",
@@ -143,7 +171,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         "Access-Control-Allow-Origin": "'*'",
         "Access-Control-Allow-Headers":
           "'Content-Type,Authorization,x-api-key,Accept,Origin,X-Requested-With'",
-        "Access-Control-Allow-Methods": "POST,OPTIONS",
+        "Access-Control-Allow-Methods": "'POST,OPTIONS'",
       },
     });
 
@@ -153,7 +181,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         "Access-Control-Allow-Origin": "'*'",
         "Access-Control-Allow-Headers":
           "'Content-Type,Authorization,x-api-key,Accept,Origin,X-Requested-With'",
-        "Access-Control-Allow-Methods": "POST,OPTIONS",
+        "Access-Control-Allow-Methods": "'POST,OPTIONS'",
       },
     });
 
@@ -195,8 +223,10 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       exportName: "BedrockGatewayRegion",
     });
 
+    /*
     this.monthlyUsageTable.grantReadWriteData(inferenceAuthorizerFn);
     this.transactionsTable.grantReadWriteData(inferenceAuthorizerFn);
+    */
 
     const rule = new events.Rule(this, "BedrockInvokeRule", {
       description:
@@ -214,25 +244,25 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     rule.addTarget(new targets.LambdaFunction(inferenceAuthorizerFn));
 
     new cdk.CfnOutput(this, "MonthlyUsageTableName", {
-      value: this.monthlyUsageTable.tableName,
+      value: monthlyUsageTable.tableName,
       description: "Name of the Bedrock Monthly Usage table",
       exportName: "BedrockMonthlyUsageTableName",
     });
 
     new cdk.CfnOutput(this, "MonthlyUsageTableArn", {
-      value: this.monthlyUsageTable.tableArn,
+      value: monthlyUsageTable.tableArn,
       description: "ARN of the Bedrock Monthly Usage table",
       exportName: "BedrockMonthlyUsageTableArn",
     });
 
     new cdk.CfnOutput(this, "TransactionsTableName", {
-      value: this.transactionsTable.tableName,
+      value: transactionsTable.tableName,
       description: "Name of the Bedrock Transactions table",
       exportName: "BedrockTransactionsTableName",
     });
 
     new cdk.CfnOutput(this, "TransactionsTableArn", {
-      value: this.transactionsTable.tableArn,
+      value: transactionsTable.tableArn,
       description: "ARN of the Bedrock Transactions table",
       exportName: "BedrockTransactionsTableArn",
     });

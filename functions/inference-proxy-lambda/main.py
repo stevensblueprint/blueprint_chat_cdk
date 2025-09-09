@@ -2,9 +2,6 @@ import os
 import json
 import boto3
 from botocore.exceptions import ClientError
-from dotenv import load_dotenv
-
-load_dotenv()
 
 REGION = "us-east-1"
 GLOBAL_MAX_TOKENS_PER_CALL = int(os.environ.get("GLOBAL_MAX_TOKENS_PER_CALL", 1024))
