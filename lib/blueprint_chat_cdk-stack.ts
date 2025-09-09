@@ -101,12 +101,14 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       }
     );
 
-    const proxyFn = new lambdaNode.NodejsFunction(this, "BedrockProxyFn", {
-      entry: path.join(__dirname, "..", "functions", "inference-proxy-lambda"),
+    const proxyFn = new lambda.Function(this, "BedrockProxyFn", {
+      runtime: lambda.Runtime.PYTHON_3_10,
       handler: "main.handler",
-      runtime: lambda.Runtime.NODEJS_20_X,
-      memorySize: 1024,
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, "..", "functions", "inference-proxy-lambda")
+      ),
       timeout: cdk.Duration.seconds(60),
+      memorySize: 1024,
       environment: {
         GLOBAL_MAX_TOKENS_PER_CALL: "1024",
         REGION: this.region,
