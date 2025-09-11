@@ -115,6 +115,20 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       }
     );
 
+    const inferenceLoggerFn = new lambda.Function(this, "InferenceLoggerFn", {
+      runtime: lambda.Runtime.PYTHON_3_10,
+      handler: "main.handler",
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, "..", "functions", "inference-logger-lambda")
+      ),
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 512,
+      environment: {
+        MONTHLY_USAGE_TABLE: monthlyUsageTable.tableName,
+        TRANSACTIONS_TABLE: transactionsTable.tableName,
+      },
+    });
+
     const proxyFn = new lambda.Function(this, "BedrockProxyFn", {
       runtime: lambda.Runtime.PYTHON_3_10,
       handler: "main.handler",
@@ -135,7 +149,6 @@ export class BlueprintChatCdkStack extends cdk.Stack {
 
         actions: [
           "bedrock:InvokeModel",
-
           "bedrock:InvokeModelWithResponseStream",
         ],
 
@@ -191,8 +204,8 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     });
 
     const v1 = api.root.addResource("v1");
-    const chat = v1.addResource("chat");
 
+    const chat = v1.addResource("chat");
     chat.addMethod("POST", lambdaIntegration, {
       apiKeyRequired: false,
     });
@@ -227,21 +240,6 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     this.monthlyUsageTable.grantReadWriteData(inferenceAuthorizerFn);
     this.transactionsTable.grantReadWriteData(inferenceAuthorizerFn);
     */
-
-    const rule = new events.Rule(this, "BedrockInvokeRule", {
-      description:
-        "Triggers on Bedrock model invocations (CloudTrail management events).",
-      eventPattern: {
-        source: ["aws.bedrock"],
-        detailType: ["AWS API Call via CloudTrail"],
-        detail: {
-          eventSource: ["bedrock.amazonaws.com"],
-          eventName: ["InvokeModel", "InvokeModelWithResponseStream"],
-        },
-      },
-    });
-
-    rule.addTarget(new targets.LambdaFunction(inferenceAuthorizerFn));
 
     new cdk.CfnOutput(this, "MonthlyUsageTableName", {
       value: monthlyUsageTable.tableName,
