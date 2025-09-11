@@ -250,10 +250,22 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       exportName: "BedrockProxyFunctionArn",
     });
 
-    new cdk.CfnOutput(this, "ApiInvokeUrl", {
+    new cdk.CfnOutput(this, "ProxyApiInvokeUrl", {
       value: `${api.url}v1/chat`,
       description: "POST here to call the proxy.",
       exportName: "BedrockGatewayInvokeUrl",
+    });
+
+    new cdk.CfnOutput(this, "AuthorizerApiInvokeUrl", {
+      value: `${api.url}v1/authorize`,
+      description: "POST here to call the authorizer.",
+      exportName: "BedrockAuthorizerInvokeUrl",
+    });
+
+    new cdk.CfnOutput(this, "LoggerApiInvokeUrl", {
+      value: `${api.url}v1/log`,
+      description: "POST here to call the logger.",
+      exportName: "BedrockLoggerInvokeUrl",
     });
 
     new cdk.CfnOutput(this, "Region", {
