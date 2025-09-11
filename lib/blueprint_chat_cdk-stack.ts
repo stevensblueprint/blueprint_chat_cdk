@@ -198,7 +198,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       },
     });
 
-    const lambdaIntegration = new apigw.LambdaIntegration(proxyFn, {
+    const proxyLambdaIntegration = new apigw.LambdaIntegration(proxyFn, {
       proxy: true,
       allowTestInvoke: true,
     });
@@ -206,7 +206,33 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     const v1 = api.root.addResource("v1");
 
     const chat = v1.addResource("chat");
-    chat.addMethod("POST", lambdaIntegration, {
+    chat.addMethod("POST", proxyLambdaIntegration, {
+      apiKeyRequired: false,
+    });
+
+    const authorizerLambdaIntegration = new apigw.LambdaIntegration(
+      inferenceAuthorizerFn,
+      {
+        proxy: true,
+        allowTestInvoke: true,
+      }
+    );
+
+    const authorize = v1.addResource("authorize");
+    authorize.addMethod("POST", authorizerLambdaIntegration, {
+      apiKeyRequired: false,
+    });
+
+    const loggerLambdaIntegration = new apigw.LambdaIntegration(
+      inferenceLoggerFn,
+      {
+        proxy: true,
+        allowTestInvoke: true,
+      }
+    );
+
+    const log = v1.addResource("log");
+    authorize.addMethod("POST", loggerLambdaIntegration, {
       apiKeyRequired: false,
     });
 
