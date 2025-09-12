@@ -158,6 +158,34 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       })
     );
 
+    inferenceAuthorizerFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+
+        actions: ["dynamodb:GetItem", "dynamodb:Scan"],
+
+        resources: ["arn:aws:dynamodb:*:*:table/Bedrock-Monthly-Usage"],
+      })
+    );
+
+    inferenceLoggerFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+
+        actions: [
+          "dynamodb:GetItem",
+          "dynamodb:Scan",
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+        ],
+
+        resources: [
+          "arn:aws:dynamodb:*:*:table/Bedrock-Monthly-Usage",
+          "arn:aws:dynamodb:*:*:table/Bedrock-Transactions",
+        ],
+      })
+    );
+
     const api = new apigw.RestApi(this, "BedApiGatewayApi", {
       restApiName: "bedrock-gateway-api",
       description: "API Gateway for Bedrock proxy Lambda function",
@@ -180,6 +208,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       },
       minCompressionSize: cdk.Size.bytes(1024),
     });
+
     api.addGatewayResponse("Default4xx", {
       type: apigw.ResponseType.DEFAULT_4XX,
       responseHeaders: {

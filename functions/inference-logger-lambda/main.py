@@ -2,7 +2,7 @@
 import os
 import json
 import boto3
-from datetime import datetime, timezone
+from datetime import datetime
 
 dynamodb = boto3.resource("dynamodb")
 MONTHLY_USAGE_TABLE = os.environ["MONTHLY_USAGE_TABLE"]
@@ -11,65 +11,52 @@ TRANSACTIONS_TABLE = os.environ["TRANSACTIONS_TABLE"]
 monthly_tbl = dynamodb.Table(MONTHLY_USAGE_TABLE)
 tx_tbl = dynamodb.Table(TRANSACTIONS_TABLE)
 
-
-def _iso_to_month_year(iso_ts: str) -> str:
-    dt = datetime.fromisoformat(iso_ts.replace("Z", "+00:00"))
-    return dt.strftime("%Y-%m")
-
-
-def _principal_to_user_id(detail: dict) -> str:
-    ui = detail.get("userIdentity") or {}
-    return ui.get("arn") or ui.get("principalId") or "unknown"
-
+def _calculate_cost_from_tokens(input_tokens: int, output_tokens: int, model_id: str):
+    if model_id == "anthropic.claude-3-haiku-20240307-v1:0":
+        return 0.00000025 * input_tokens + 0.00000125 * output_tokens
+    elif model_id == "anthropic.claude-sonnet-4-20250514-v1:0":
+        return 0.000003 * input_tokens + 0.000015 * output_tokens
+    else:
+        return 0
 
 def handler(event, _):
-    detail = event.get("detail") or {}
+    body = json.loads(event.get("body", "{}"))
 
-    event_time = detail.get("eventTime") or datetime.now(timezone.utc).isoformat()
-    region = detail.get("awsRegion", "unknown")
-    event_name = detail.get("eventName", "unknown")
-    event_id = detail.get("eventID", "")
-    event_source_ip = detail.get("sourceIPAddress", "")
+    user_arn = body.get("userArn")
+    timestamp = body.get("timestamp")
+    model_id = body.get("model_id")
+    input_tokens = body.get("input_tokens")
+    output_tokens = body.get("output_tokens")
 
-    request_params = detail.get("requestParameters") or {}
-    model_id = request_params.get("modelId", "unknown")
-
-    user_id = _principal_to_user_id(detail)
-    month_year = _iso_to_month_year(event_time)
+    dt = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S")
+    month_year = dt.strftime("%m_%Y")
 
     usage = {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
     }
 
+    cost = _calculate_cost_from_tokens(input_tokens, output_tokens, model_id)
+
     tx_item = {
-        "userId": user_id,
-        "timestamp": event_time,  # ISO time for natural sort
-        "month_year": month_year,  # supports GSI "month-year-index"
-        "model_id": model_id,  # supports GSI "model-id-index"
-        "region": region,
-        "event_name": event_name,
-        "event_id": event_id,
-        "source_ip": event_source_ip,
+        "userArn": user_arn,
+        "timestamp": timestamp,
+        "model_id": model_id,
         "usage": usage,
+        "cost": cost
     }
 
     tx_tbl.put_item(Item=tx_item)
 
     monthly_tbl.update_item(
-        Key={"userId": user_id, "month_year": month_year},
+        Key={"userArn": user_arn, "month_year": month_year},
         UpdateExpression="""
             ADD invocations :one,
-                input_tokens :in_tok,
-                output_tokens :out_tok,
-                total_tokens :tot_tok
+                cost :cost
         """,
         ExpressionAttributeValues={
             ":one": 1,
-            ":in_tok": usage["input_tokens"],
-            ":out_tok": usage["output_tokens"],
-            ":tot_tok": usage["total_tokens"],
+            ":cost": cost,
         },
     )
 
