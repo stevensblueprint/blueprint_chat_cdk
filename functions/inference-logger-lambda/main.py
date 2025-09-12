@@ -3,6 +3,7 @@ import os
 import json
 import boto3
 from datetime import datetime
+from decimal import Decimal
 
 dynamodb = boto3.resource("dynamodb")
 MONTHLY_USAGE_TABLE = os.environ["MONTHLY_USAGE_TABLE"]
@@ -36,7 +37,7 @@ def handler(event, _):
         "output_tokens": output_tokens,
     }
 
-    cost = _calculate_cost_from_tokens(input_tokens, output_tokens, model_id)
+    cost = Decimal(str(_calculate_cost_from_tokens(input_tokens, output_tokens, model_id)))
 
     tx_item = {
         "userArn": user_arn,

@@ -175,7 +175,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         actions: [
           "dynamodb:GetItem",
           "dynamodb:Scan",
-          "dynamodb:GetItem",
+          "dynamodb:UpdateItem",
           "dynamodb:PutItem",
         ],
 
