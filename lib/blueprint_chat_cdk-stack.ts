@@ -14,6 +14,8 @@ export class BlueprintChatCdkStack extends cdk.Stack {
   private readonly projectName = "blueprint-chat";
   private readonly domainName = "sitblueprint.com";
   private readonly subdomainName = "chat";
+  // Define monthly usage limits
+  private readonly monthly_limit = 6.85;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -110,7 +112,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         memorySize: 512,
         environment: {
           MONTHLY_USAGE_TABLE: monthlyUsageTable.tableName,
-          TRANSACTIONS_TABLE: transactionsTable.tableName,
+          MONTHLY_LIMIT: String(this.monthly_limit),
         },
       }
     );

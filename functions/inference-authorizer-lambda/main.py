@@ -3,74 +3,35 @@ import os
 import json
 import boto3
 from datetime import datetime, timezone
+from datetime import datetime
 
 dynamodb = boto3.resource("dynamodb")
 MONTHLY_USAGE_TABLE = os.environ["MONTHLY_USAGE_TABLE"]
-TRANSACTIONS_TABLE = os.environ["TRANSACTIONS_TABLE"]
+MONTHLY_LIMIT = float(os.environ["MONTHLY_LIMIT"])
 
 monthly_tbl = dynamodb.Table(MONTHLY_USAGE_TABLE)
-tx_tbl = dynamodb.Table(TRANSACTIONS_TABLE)
-
-
-def _iso_to_month_year(iso_ts: str) -> str:
-    dt = datetime.fromisoformat(iso_ts.replace("Z", "+00:00"))
-    return dt.strftime("%Y-%m")
-
-
-def _principal_to_user_id(detail: dict) -> str:
-    ui = detail.get("userIdentity") or {}
-    return ui.get("arn") or ui.get("principalId") or "unknown"
-
 
 def handler(event, _):
-    detail = event.get("detail") or {}
+    now = datetime.now()
+    month_year = now.strftime("%m_%Y")
 
-    event_time = detail.get("eventTime") or datetime.now(timezone.utc).isoformat()
-    region = detail.get("awsRegion", "unknown")
-    event_name = detail.get("eventName", "unknown")
-    event_id = detail.get("eventID", "")
-    event_source_ip = detail.get("sourceIPAddress", "")
+    body = json.loads(event.get("body", "{}"))
+    user_arn = body.get("userArn")
 
-    request_params = detail.get("requestParameters") or {}
-    model_id = request_params.get("modelId", "unknown")
-
-    user_id = _principal_to_user_id(detail)
-    month_year = _iso_to_month_year(event_time)
-
-    usage = {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-    }
-
-    tx_item = {
-        "userId": user_id,
-        "timestamp": event_time,  # ISO time for natural sort
-        "month_year": month_year,  # supports GSI "month-year-index"
-        "model_id": model_id,  # supports GSI "model-id-index"
-        "region": region,
-        "event_name": event_name,
-        "event_id": event_id,
-        "source_ip": event_source_ip,
-        "usage": usage,
-    }
-
-    tx_tbl.put_item(Item=tx_item)
-
-    monthly_tbl.update_item(
-        Key={"userId": user_id, "month_year": month_year},
-        UpdateExpression="""
-            ADD invocations :one,
-                input_tokens :in_tok,
-                output_tokens :out_tok,
-                total_tokens :tot_tok
-        """,
-        ExpressionAttributeValues={
-            ":one": 1,
-            ":in_tok": usage["input_tokens"],
-            ":out_tok": usage["output_tokens"],
-            ":tot_tok": usage["total_tokens"],
-        },
+    response = monthly_tbl.get_item(
+        Key={
+            "userArn": user_arn,
+            "month_year": month_year
+        }
     )
 
-    return {"statusCode": 200, "body": json.dumps({"ok": True})}
+    item = response.get("Item")
+
+    if item:
+        monthly_usage = item.get("cost")
+        if monthly_usage >= MONTHLY_LIMIT:
+            return {"statusCode": 200, "body": json.dumps({"isAuthorized": False})}
+        else:
+            {"statusCode": 200, "body": json.dumps({"isAuthorized": True})}
+    else:
+        return {"statusCode": 200, "body": json.dumps({"isAuthorized": True})}
