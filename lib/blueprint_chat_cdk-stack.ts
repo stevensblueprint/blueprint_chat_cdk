@@ -263,7 +263,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     );
 
     const log = v1.addResource("log");
-    authorize.addMethod("POST", loggerLambdaIntegration, {
+    log.addMethod("POST", loggerLambdaIntegration, {
       apiKeyRequired: false,
     });
 
