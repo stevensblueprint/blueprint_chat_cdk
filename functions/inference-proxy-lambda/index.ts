@@ -1,6 +1,6 @@
 import {
   BedrockRuntimeClient,
-  InvokeModelCommand,
+  ConverseStreamCommand,
   InvokeModelWithResponseStreamCommand,
 } from "@aws-sdk/client-bedrock-runtime";
 
@@ -14,93 +14,63 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers":
     "Content-Type,Authorization,x-api-key,Accept,Origin,X-Requested-With",
   "Access-Control-Allow-Methods": "POST,OPTIONS",
-  "Content-Type": "application/json",
 };
 
 const client = new BedrockRuntimeClient({ region: REGION });
 
-export const handler = async (event) => {
-  try {
-    if (event.httpMethod === "OPTIONS") {
-      return { statusCode: 200, headers: CORS_HEADERS, body: "" };
-    }
+const decodeChunkBytes = (chunkObj: any) => {
+  if (!chunkObj.chunk?.bytes) return "";
 
-    const body = JSON.parse(event.body || "{}");
-    const { modelId, messages, max_tokens, temperature } = body;
+  const bytesMap = chunkObj.chunk.bytes;
+  const byteValues = Object.keys(bytesMap)
+    .sort((a, b) => Number(a) - Number(b))
+    .map((k) => bytesMap[k]);
 
-    if (!modelId || !messages) {
-      return {
-        statusCode: 400,
-        headers: CORS_HEADERS,
-        body: JSON.stringify({
-          error: "Missing required fields: modelId, messages",
-        }),
+  const uint8 = new Uint8Array(byteValues);
+  const decoder = new TextDecoder();
+  return decoder.decode(uint8);
+};
+
+exports.handler = awslambda.streamifyResponse(
+  async (event, responseStream, _) => {
+    try {
+      const body = JSON.parse(event.body || "{}");
+      const {
+        modelId,
+        messages,
+        system,
+        inferenceConfig,
+        additionalModelRequestFields,
+      } = body;
+
+      const command = new ConverseStreamCommand({
+        modelId,
+        messages,
+        system,
+        inferenceConfig,
+        additionalModelRequestFields,
+      });
+
+      const response = await client.send(command);
+
+      const usageTotals = {
+        inputTokens: 0,
+        outputTokens: 0,
       };
-    }
 
-    const maxTokens = Math.min(max_tokens || 256, GLOBAL_MAX_TOKENS_PER_CALL);
-
-    const payload = {
-      anthropic_version: "bedrock-2023-05-31",
-      messages: [{ role: "user", content: messages }],
-      max_tokens: maxTokens,
-      temperature: temperature || 0.5,
-    };
-
-    const command = new InvokeModelWithResponseStreamCommand({
-      modelId,
-      contentType: "application/json",
-      accept: "application/json",
-      body: JSON.stringify(payload),
-    });
-
-    const response = await client.send(command);
-
-    let fullText = "";
-    const usageTotals = {
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-    };
-
-    for await (const eventChunk of response.body) {
-      console.log(eventChunk);
-      if (eventChunk.chunk) {
-        const rawBytes = Buffer.from(eventChunk.chunk.bytes);
-        try {
-          const parsed = JSON.parse(rawBytes.toString("utf-8"));
-          if (parsed.text) fullText += parsed.text;
-          if (parsed.metadata?.usage) {
-            const usage = parsed.metadata.usage;
-            usageTotals.inputTokens += usage.inputTokens || 0;
-            usageTotals.outputTokens += usage.outputTokens || 0;
-            usageTotals.cacheReadTokens += usage.cacheReadInputTokens || 0;
-            usageTotals.cacheWriteTokens += usage.cacheWriteInputTokens || 0;
-          }
-        } catch {
-          // ignore parse errors
+      if (response.stream) {
+        for await (const chunk of response.stream) {
+          responseStream.write(JSON.stringify(chunk) + "\n");
         }
       }
-    }
 
-    return {
-      statusCode: 200,
-      headers: CORS_HEADERS,
-      body: JSON.stringify({ completion: fullText, usage: usageTotals }),
-    };
-  } catch (err) {
-    console.error(err);
-    const statusCode =
-      err.name === "AccessDeniedException"
-        ? 403
-        : err.name === "ValidationException"
-          ? 400
-          : 500;
-    return {
-      statusCode,
-      headers: CORS_HEADERS,
-      body: JSON.stringify({ error: err.message, details: err.stack }),
-    };
+      console.log("Usage totals:", usageTotals);
+      responseStream.end();
+    } catch (err) {
+      console.error(err);
+      responseStream.write("Internal Server Error\n");
+      responseStream.write(err.message + "\n");
+      responseStream.end();
+    }
   }
-};
+);

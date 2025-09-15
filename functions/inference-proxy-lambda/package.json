@@ -12,5 +12,8 @@
   "type": "commonjs",
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.888.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.152"
   }
 }

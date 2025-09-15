@@ -259,6 +259,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
 
     const bedrockProxyFunctionUrl = proxyFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
+      invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
       cors: {
         allowedOrigins: ["*"],
         allowedHeaders: ["Authorization", "Content-Type"],
