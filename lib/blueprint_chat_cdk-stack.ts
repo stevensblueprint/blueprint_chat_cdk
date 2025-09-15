@@ -2,11 +2,11 @@ import * as cdk from "aws-cdk-lib";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as iam from "aws-cdk-lib/aws-iam";
-import * as events from "aws-cdk-lib/aws-events";
-import * as targets from "aws-cdk-lib/aws-events-targets";
 import * as path from "path";
 import { Construct } from "constructs";
 import * as apigw from "aws-cdk-lib/aws-apigateway";
+import * as apigatewayv2 from "aws-cdk-lib/aws-apigatewayv2";
+import * as integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 
 export class BlueprintChatCdkStack extends cdk.Stack {
   public readonly monthlyUsageTable: dynamodb.Table;
@@ -229,17 +229,22 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       },
     });
 
-    const proxyLambdaIntegration = new apigw.LambdaIntegration(proxyFn, {
-      proxy: true,
-      allowTestInvoke: true,
+    const httpApi = new apigatewayv2.HttpApi(this, "GatewayAPIv2", {
+      apiName: "gateway-api-v2",
+    });
+
+    const lambdaIntegration = new integrations.HttpLambdaIntegration(
+      "LambdaIntegration",
+      proxyFn
+    );
+
+    httpApi.addRoutes({
+      path: "/chat",
+      methods: [apigatewayv2.HttpMethod.POST],
+      integration: lambdaIntegration,
     });
 
     const v1 = api.root.addResource("v1");
-
-    const chat = v1.addResource("chat");
-    chat.addMethod("POST", proxyLambdaIntegration, {
-      apiKeyRequired: false,
-    });
 
     const authorizerLambdaIntegration = new apigw.LambdaIntegration(
       inferenceAuthorizerFn,
@@ -282,7 +287,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, "ProxyApiInvokeUrl", {
-      value: `${api.url}v1/chat`,
+      value: `${httpApi.url}chat`,
       description: "POST here to call the proxy.",
       exportName: "BedrockGatewayInvokeUrl",
     });
