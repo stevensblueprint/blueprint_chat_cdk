@@ -132,8 +132,8 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     });
 
     const proxyFn = new lambda.Function(this, "BedrockProxyFn", {
-      runtime: lambda.Runtime.PYTHON_3_10,
-      handler: "main.handler",
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: "index.handler",
       code: lambda.Code.fromAsset(
         path.join(__dirname, "..", "functions", "inference-proxy-lambda")
       ),
@@ -229,21 +229,6 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       },
     });
 
-    const httpApi = new apigatewayv2.HttpApi(this, "GatewayAPIv2", {
-      apiName: "gateway-api-v2",
-    });
-
-    const lambdaIntegration = new integrations.HttpLambdaIntegration(
-      "LambdaIntegration",
-      proxyFn
-    );
-
-    httpApi.addRoutes({
-      path: "/chat",
-      methods: [apigatewayv2.HttpMethod.POST],
-      integration: lambdaIntegration,
-    });
-
     const v1 = api.root.addResource("v1");
 
     const authorizerLambdaIntegration = new apigw.LambdaIntegration(
@@ -272,6 +257,15 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       apiKeyRequired: false,
     });
 
+    const bedrockProxyFunctionUrl = proxyFn.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,
+      cors: {
+        allowedOrigins: ["*"],
+        allowedHeaders: ["Authorization", "Content-Type"],
+        allowedMethods: [lambda.HttpMethod.POST],
+      },
+    });
+
     new cdk.CfnOutput(this, "LambdaFunctionName", {
       value: proxyFn.functionName,
       description:
@@ -287,7 +281,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, "ProxyApiInvokeUrl", {
-      value: `${httpApi.url}chat`,
+      value: bedrockProxyFunctionUrl.url,
       description: "POST here to call the proxy.",
       exportName: "BedrockGatewayInvokeUrl",
     });

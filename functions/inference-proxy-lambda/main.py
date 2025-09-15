@@ -37,19 +37,47 @@ def handler(event, _):
             "temperature": body.get("temperature", 0.5),
         }
 
-        response = bedrock_client.invoke_model(
+        response = bedrock_client.invoke_model_with_response_stream(
             modelId=model_id,
             contentType="application/json",
+            accept="application/json",
             body=json.dumps(payload)
         )
 
-        response_body = json.loads(response["body"].read().decode())
-        result_text = response_body.get("content", [{}])[0].get("text", response_body)
+        usage_totals = {
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+        }
+
+        def stream_generator():
+            for event in response["body"]:
+                if "chunk" in event:
+                    raw_bytes = event["chunk"]["bytes"]
+                    try:
+                        parsed = json.loads(raw_bytes.decode("utf-8"))
+
+                        if "metadata" in parsed and "usage" in parsed["metadata"]:
+                            usage = parsed["metadata"]["usage"]
+                            usage_totals["inputTokens"] += usage.get("inputTokens", 0)
+                            usage_totals["outputTokens"] += usage.get("outputTokens", 0)
+                            usage_totals["cacheReadTokens"] += usage.get("cacheReadInputTokens", 0)
+                            usage_totals["cacheWriteTokens"] += usage.get("cacheWriteInputTokens", 0)
+                    except Exception:
+                        pass
+
+                    yield raw_bytes
+
+                else:
+                    yield json.dumps(event).encode("utf-8")
+
+        print("final token usage: ", usage_totals)
 
         return {
             "statusCode": 200,
             "headers": CORS_HEADERS,
-            "body": json.dumps({"response": result_text})
+            "body": stream_generator()
         }
 
     except ClientError as err:
