@@ -1,40 +1,25 @@
 import {
   BedrockRuntimeClient,
   ConverseStreamCommand,
-  InvokeModelWithResponseStreamCommand,
 } from "@aws-sdk/client-bedrock-runtime";
 
 const REGION = process.env.REGION || "us-east-1";
-const GLOBAL_MAX_TOKENS_PER_CALL = parseInt(
-  process.env.GLOBAL_MAX_TOKENS_PER_CALL || "1024"
-);
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "Content-Type,Authorization,x-api-key,Accept,Origin,X-Requested-With",
-  "Access-Control-Allow-Methods": "POST,OPTIONS",
-};
 
 const client = new BedrockRuntimeClient({ region: REGION });
 
-const decodeChunkBytes = (chunkObj: any) => {
-  if (!chunkObj.chunk?.bytes) return "";
-
-  const bytesMap = chunkObj.chunk.bytes;
-  const byteValues = Object.keys(bytesMap)
-    .sort((a, b) => Number(a) - Number(b))
-    .map((k) => bytesMap[k]);
-
-  const uint8 = new Uint8Array(byteValues);
-  const decoder = new TextDecoder();
-  return decoder.decode(uint8);
-};
-
 exports.handler = awslambda.streamifyResponse(
   async (event, responseStream, _) => {
+    console.log("Received event:", JSON.stringify(event, null, 2));
+
+    const usage = {
+      inputTokens: 0,
+      outputTokens: 0,
+    };
+
     try {
       const body = JSON.parse(event.body || "{}");
+      console.log("Parsed request body: ", JSON.stringify(body, null, 2));
+
       const {
         modelId,
         messages,
@@ -42,6 +27,14 @@ exports.handler = awslambda.streamifyResponse(
         inferenceConfig,
         additionalModelRequestFields,
       } = body;
+
+      if (!modelId || !messages) {
+        const errorMsg = "Missing required parameters: modelId or messages";
+        console.error(errorMsg);
+        responseStream.write(JSON.stringify({ error: errorMsg }) + "\n");
+        responseStream.end();
+        return;
+      }
 
       const command = new ConverseStreamCommand({
         modelId,
@@ -51,25 +44,35 @@ exports.handler = awslambda.streamifyResponse(
         additionalModelRequestFields,
       });
 
+      console.log(
+        "Sending command to Bedrock: ",
+        JSON.stringify(command, null, 2)
+      );
       const response = await client.send(command);
-
-      const usageTotals = {
-        inputTokens: 0,
-        outputTokens: 0,
-      };
 
       if (response.stream) {
         for await (const chunk of response.stream) {
+          console.log("Received chunk: ", JSON.stringify(chunk, null, 2));
           responseStream.write(JSON.stringify(chunk) + "\n");
+          if (chunk.metadata?.usage) {
+            usage.inputTokens += chunk.metadata.usage.inputTokens || 0;
+            usage.outputTokens += chunk.metadata.usage.outputTokens || 0;
+          }
         }
       }
 
-      console.log("Usage totals:", usageTotals);
+      console.log("Total token usage: ", usage);
       responseStream.end();
-    } catch (err) {
-      console.error(err);
-      responseStream.write("Internal Server Error\n");
-      responseStream.write(err.message + "\n");
+    } catch (err: any) {
+      console.error("Error processing request:", err);
+
+      responseStream.write(
+        JSON.stringify({
+          error: "Internal Server Error",
+          message: err.message,
+          stack: err.stack,
+        }) + "\n"
+      );
       responseStream.end();
     }
   }

@@ -5,15 +5,10 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as path from "path";
 import { Construct } from "constructs";
 import * as apigw from "aws-cdk-lib/aws-apigateway";
-import * as apigatewayv2 from "aws-cdk-lib/aws-apigatewayv2";
-import * as integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 
 export class BlueprintChatCdkStack extends cdk.Stack {
   public readonly monthlyUsageTable: dynamodb.Table;
   public readonly transactionsTable: dynamodb.Table;
-  private readonly projectName = "blueprint-chat";
-  private readonly domainName = "sitblueprint.com";
-  private readonly subdomainName = "chat";
   // Define monthly usage limits
   private readonly monthly_limit = 6.85;
 
@@ -140,7 +135,6 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(60),
       memorySize: 1024,
       environment: {
-        GLOBAL_MAX_TOKENS_PER_CALL: "1024",
         REGION: this.region,
       },
     });
