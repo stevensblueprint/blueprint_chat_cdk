@@ -94,35 +94,17 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       "Bedrock-Transactions"
     );
 
-    const inferenceAuthorizerFn = new lambda.Function(
-      this,
-      "InferenceAuthorizerFn",
-      {
-        runtime: lambda.Runtime.PYTHON_3_10,
-        handler: "main.handler",
-        code: lambda.Code.fromAsset(
-          path.join(__dirname, "..", "functions", "inference-authorizer-lambda")
-        ),
-        timeout: cdk.Duration.seconds(30),
-        memorySize: 512,
-        environment: {
-          MONTHLY_USAGE_TABLE: monthlyUsageTable.tableName,
-          MONTHLY_LIMIT: String(this.monthly_limit),
-        },
-      }
-    );
-
-    const inferenceLoggerFn = new lambda.Function(this, "InferenceLoggerFn", {
+    const inferenceUsageFn = new lambda.Function(this, "InferenceUsageFn", {
       runtime: lambda.Runtime.PYTHON_3_10,
       handler: "main.handler",
       code: lambda.Code.fromAsset(
-        path.join(__dirname, "..", "functions", "inference-logger-lambda")
+        path.join(__dirname, "..", "functions", "inference-usage-lambda")
       ),
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
       environment: {
         MONTHLY_USAGE_TABLE: monthlyUsageTable.tableName,
-        TRANSACTIONS_TABLE: transactionsTable.tableName,
+        MONTHLY_LIMIT: String(this.monthly_limit),
       },
     });
 
@@ -146,27 +128,6 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         actions: [
           "bedrock:InvokeModel",
           "bedrock:InvokeModelWithResponseStream",
-        ],
-
-        resources: ["arn:aws:bedrock:*:*:foundation-model/anthropic.*"],
-      })
-    );
-
-    inferenceAuthorizerFn.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-
-        actions: ["dynamodb:GetItem", "dynamodb:Scan"],
-
-        resources: ["arn:aws:dynamodb:*:*:table/Bedrock-Monthly-Usage"],
-      })
-    );
-
-    inferenceLoggerFn.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-
-        actions: [
           "dynamodb:GetItem",
           "dynamodb:Scan",
           "dynamodb:UpdateItem",
@@ -174,9 +135,20 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         ],
 
         resources: [
+          "arn:aws:bedrock:*:*:foundation-model/anthropic.*",
           "arn:aws:dynamodb:*:*:table/Bedrock-Monthly-Usage",
           "arn:aws:dynamodb:*:*:table/Bedrock-Transactions",
         ],
+      })
+    );
+
+    inferenceUsageFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+
+        actions: ["dynamodb:GetItem", "dynamodb:Scan"],
+
+        resources: ["arn:aws:dynamodb:*:*:table/Bedrock-Monthly-Usage"],
       })
     );
 
@@ -225,29 +197,16 @@ export class BlueprintChatCdkStack extends cdk.Stack {
 
     const v1 = api.root.addResource("v1");
 
-    const authorizerLambdaIntegration = new apigw.LambdaIntegration(
-      inferenceAuthorizerFn,
+    const usageLambdaIntegration = new apigw.LambdaIntegration(
+      inferenceUsageFn,
       {
         proxy: true,
         allowTestInvoke: true,
       }
     );
 
-    const authorize = v1.addResource("authorize");
-    authorize.addMethod("POST", authorizerLambdaIntegration, {
-      apiKeyRequired: false,
-    });
-
-    const loggerLambdaIntegration = new apigw.LambdaIntegration(
-      inferenceLoggerFn,
-      {
-        proxy: true,
-        allowTestInvoke: true,
-      }
-    );
-
-    const log = v1.addResource("log");
-    log.addMethod("POST", loggerLambdaIntegration, {
+    const usage = v1.addResource("usage");
+    usage.addMethod("GET", usageLambdaIntegration, {
       apiKeyRequired: false,
     });
 
@@ -281,16 +240,10 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       exportName: "BedrockGatewayInvokeUrl",
     });
 
-    new cdk.CfnOutput(this, "AuthorizerApiInvokeUrl", {
-      value: `${api.url}v1/authorize`,
-      description: "POST here to call the authorizer.",
-      exportName: "BedrockAuthorizerInvokeUrl",
-    });
-
-    new cdk.CfnOutput(this, "LoggerApiInvokeUrl", {
-      value: `${api.url}v1/log`,
-      description: "POST here to call the logger.",
-      exportName: "BedrockLoggerInvokeUrl",
+    new cdk.CfnOutput(this, "UsageApiInvokeUrl", {
+      value: `${api.url}v1/usage`,
+      description: "GET here to retrieve current monthly usage for a user.",
+      exportName: "BedrockUsageInvokeUrl",
     });
 
     new cdk.CfnOutput(this, "Region", {
@@ -298,11 +251,6 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       description: "AWS Region where the stack is deployed",
       exportName: "BedrockGatewayRegion",
     });
-
-    /*
-    this.monthlyUsageTable.grantReadWriteData(inferenceAuthorizerFn);
-    this.transactionsTable.grantReadWriteData(inferenceAuthorizerFn);
-    */
 
     new cdk.CfnOutput(this, "MonthlyUsageTableName", {
       value: monthlyUsageTable.tableName,

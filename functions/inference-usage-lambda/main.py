@@ -2,7 +2,7 @@
 import os
 import json
 import boto3
-from datetime import datetime, timezone
+from datetime import datetime
 from datetime import datetime
 
 dynamodb = boto3.resource("dynamodb")
@@ -15,8 +15,8 @@ def handler(event, _):
     now = datetime.now()
     month_year = now.strftime("%m_%Y")
 
-    body = json.loads(event.get("body", "{}"))
-    user_arn = body.get("userArn")
+    headers = event.get("headers", "{}")
+    user_arn = headers.get('userArn')
 
     response = monthly_tbl.get_item(
         Key={
@@ -29,9 +29,6 @@ def handler(event, _):
 
     if item:
         monthly_usage = item.get("cost")
-        if monthly_usage >= MONTHLY_LIMIT:
-            return {"statusCode": 200, "body": json.dumps({"isAuthorized": False})}
-        else:
-            {"statusCode": 200, "body": json.dumps({"isAuthorized": True})}
+        return {"statusCode": 200, "body": json.dumps({"current_usage": str(monthly_usage), "monthly_limit": str(MONTHLY_LIMIT)})}
     else:
-        return {"statusCode": 200, "body": json.dumps({"isAuthorized": True})}
+        return {"statusCode": 200, "body": json.dumps({"current_usage": 0, "monthly_limit": MONTHLY_LIMIT})}
