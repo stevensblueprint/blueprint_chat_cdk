@@ -118,6 +118,9 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       memorySize: 1024,
       environment: {
         REGION: this.region,
+        MONTHLY_USAGE_TABLE: monthlyUsageTable.tableName,
+        TRANSACTIONS_TABLE: transactionsTable.tableName,
+        MONTHLY_LIMIT: String(this.monthly_limit),
       },
     });
 
