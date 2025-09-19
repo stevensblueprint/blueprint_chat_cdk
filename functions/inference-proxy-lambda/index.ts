@@ -3,14 +3,24 @@ import {
   ConverseStreamCommand,
 } from "@aws-sdk/client-bedrock-runtime";
 import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
-import { DynamoDBClient, DescribeTableCommand } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import {
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  UpdateCommand,
+} from "@aws-sdk/lib-dynamodb";
 
 const REGION = process.env.REGION || "us-east-1";
+const MONTHLY_USAGE_TABLE = process.env.MONTHLY_USAGE_TABLE;
+const TRANSACTIONS_TABLE = process.env.TRANSACTIONS_TABLE;
+const MONTHLY_LIMIT = process.env.MONTHLY_LIMIT;
 
 const bedrockClient = new BedrockRuntimeClient({ region: REGION });
 const dynamodbClient = new DynamoDBClient({ region: "us-east-1" });
+const docClient = DynamoDBDocumentClient.from(dynamodbClient);
 
-export async function verifyStsCredentials(
+async function verifyStsCredentials(
   accessKeyId: string,
   secretAccessKey: string,
   sessionToken: string
@@ -37,6 +47,21 @@ export async function verifyStsCredentials(
   } catch (error) {
     console.error("Invalid credentials: ", error);
     return null;
+  }
+}
+
+function calculateCostFromTokens(
+  inputTokens: number,
+  outputTokens: number,
+  modelId: string
+): number {
+  switch (modelId) {
+    case "anthropic.claude-3-haiku-20240307-v1:0":
+      return 0.00000025 * inputTokens + 0.00000125 * outputTokens;
+    case "anthropic.claude-3-5-sonnet-20240620-v1:0":
+      return 0.000003 * inputTokens + 0.000015 * outputTokens;
+    default:
+      return 0;
   }
 }
 
@@ -82,14 +107,41 @@ exports.handler = awslambda.streamifyResponse(
       }
 
       if (
-        modelId != "anthropic.claude-3-haiku-20240307-v1:0" ||
-        modelId != "anthropic.claude-3-5-haiku-20241022-v1:0" ||
-        modelId != "anthropic.claude-sonnet-4-20250514-v1:0"
+        modelId != "anthropic.claude-3-haiku-20240307-v1:0" &&
+        modelId != "anthropic.claude-3-5-sonnet-20240620-v1:0"
       ) {
         console.error("Invalid modelId: ", modelId);
         responseStream.write(
           JSON.stringify({ error: "Invalid model!" }) + "\n"
         );
+        responseStream.end();
+        return;
+      }
+
+      const now = new Date();
+      const monthYear = `${(now.getMonth() + 1).toString().padStart(2, "0")}_${now.getFullYear()}`;
+      const timestamp = now.toISOString().split(".")[0];
+
+      const current_monthly_usage = (
+        await docClient.send(
+          new GetCommand({
+            TableName: MONTHLY_USAGE_TABLE,
+            Key: {
+              userArn,
+              month_year: monthYear,
+            },
+          })
+        )
+      ).Item;
+
+      if (
+        current_monthly_usage &&
+        current_monthly_usage.cost >= MONTHLY_LIMIT!
+      ) {
+        const errorMsg =
+          "Unable to process request. Current monthly usage exceeds the monthly limit.";
+        console.error(errorMsg);
+        responseStream.write(JSON.stringify({ error: errorMsg }) + "\n");
         responseStream.end();
         return;
       }
@@ -121,6 +173,37 @@ exports.handler = awslambda.streamifyResponse(
 
       console.log("Total token usage: ", usage);
       responseStream.end();
+
+      const cost = calculateCostFromTokens(
+        usage.inputTokens,
+        usage.outputTokens,
+        modelId
+      );
+
+      await docClient.send(
+        new PutCommand({
+          TableName: TRANSACTIONS_TABLE,
+          Item: {
+            userArn,
+            timestamp,
+            modelId,
+            usage,
+            cost,
+          },
+        })
+      );
+
+      await docClient.send(
+        new UpdateCommand({
+          TableName: MONTHLY_USAGE_TABLE,
+          Key: { userArn, month_year: monthYear },
+          UpdateExpression: "ADD invocations :one, cost :cost",
+          ExpressionAttributeValues: {
+            ":one": 1,
+            ":cost": cost,
+          },
+        })
+      );
     } catch (err: any) {
       console.error("Error processing request:", err);
 

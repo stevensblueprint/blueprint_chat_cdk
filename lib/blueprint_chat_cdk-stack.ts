@@ -10,7 +10,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
   public readonly monthlyUsageTable: dynamodb.Table;
   public readonly transactionsTable: dynamodb.Table;
   // Define monthly usage limits
-  private readonly monthly_limit = 6.85;
+  private readonly monthly_limit = 6.6;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -132,7 +132,6 @@ export class BlueprintChatCdkStack extends cdk.Stack {
           "bedrock:InvokeModel",
           "bedrock:InvokeModelWithResponseStream",
           "dynamodb:GetItem",
-          "dynamodb:Scan",
           "dynamodb:UpdateItem",
           "dynamodb:PutItem",
         ],
