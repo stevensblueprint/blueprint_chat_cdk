@@ -10,6 +10,7 @@ import {
   PutCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { CognitoJwtVerifier } from "aws-jwt-verify";
 
 const REGION = process.env.REGION || "us-east-1";
 const MONTHLY_USAGE_TABLE = process.env.MONTHLY_USAGE_TABLE;
@@ -50,6 +51,25 @@ async function verifyStsCredentials(
   }
 }
 
+async function verifyCognitoCredentials(
+  accessToken: string
+): Promise<string | null> {
+  const verifier = CognitoJwtVerifier.create({
+    userPoolId: "us-east-1_0QwnhHQ9T",
+    tokenUse: null,
+    clientId: "6bt3it6ivu28ng49ga4cvnkled",
+  });
+
+  try {
+    const payload = await verifier.verify(accessToken);
+    console.log("Token is valid. Payload: ", payload);
+    return payload.username as string;
+  } catch {
+    console.log("Token not valid!");
+    return null;
+  }
+}
+
 function calculateCostFromTokens(
   inputTokens: number,
   outputTokens: number,
@@ -77,18 +97,24 @@ exports.handler = awslambda.streamifyResponse(
     try {
       const body = JSON.parse(event.body || "{}");
       const headers = event.headers;
-      const auth = {
-        sessionToken: headers["x-aws-session-token"],
-        accessKey: headers["x-aws-access-key"],
-        secretKey: headers["x-aws-secret-key"],
-      };
+      const auth = headers["x-aws-session-token"]
+        ? {
+            sessionToken: headers["x-aws-session-token"],
+            accessKey: headers["x-aws-access-key"],
+            secretKey: headers["x-aws-secret-key"],
+          }
+        : {
+            accessToken: headers["x-cognito-access-token"],
+          };
       console.log("Parsed request body: ", JSON.stringify(body, null, 2));
 
-      const userArn = await verifyStsCredentials(
-        auth.accessKey,
-        auth.secretKey,
-        auth.sessionToken
-      );
+      const userArn = headers["x-aws-session-token"]
+        ? await verifyStsCredentials(
+            auth.accessKey,
+            auth.secretKey,
+            auth.sessionToken
+          )
+        : await verifyCognitoCredentials(auth.accessToken);
 
       const {
         modelId,
