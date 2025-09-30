@@ -85,20 +85,20 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     const monthlyUsageTable = dynamodb.Table.fromTableName(
       this,
       "MonthlyUsageTable",
-      "Bedrock-Monthly-Usage"
+      "Bedrock-Monthly-Usage",
     );
 
     const transactionsTable = dynamodb.Table.fromTableName(
       this,
       "TransactionsTable",
-      "Bedrock-Transactions"
+      "Bedrock-Transactions",
     );
 
     const inferenceUsageFn = new lambda.Function(this, "InferenceUsageFn", {
       runtime: lambda.Runtime.PYTHON_3_10,
       handler: "main.handler",
       code: lambda.Code.fromAsset(
-        path.join(__dirname, "..", "functions", "inference-usage-lambda")
+        path.join(__dirname, "..", "functions", "inference-usage-lambda"),
       ),
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
@@ -112,7 +112,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: "index.handler",
       code: lambda.Code.fromAsset(
-        path.join(__dirname, "..", "functions", "inference-proxy-lambda")
+        path.join(__dirname, "..", "functions", "inference-proxy-lambda"),
       ),
       timeout: cdk.Duration.seconds(60),
       memorySize: 1024,
@@ -141,7 +141,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
           "arn:aws:dynamodb:*:*:table/Bedrock-Monthly-Usage",
           "arn:aws:dynamodb:*:*:table/Bedrock-Transactions",
         ],
-      })
+      }),
     );
 
     inferenceUsageFn.addToRolePolicy(
@@ -151,7 +151,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         actions: ["dynamodb:GetItem", "dynamodb:Scan"],
 
         resources: ["arn:aws:dynamodb:*:*:table/Bedrock-Monthly-Usage"],
-      })
+      }),
     );
 
     const api = new apigw.RestApi(this, "BedApiGatewayApi", {
@@ -204,7 +204,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       {
         proxy: true,
         allowTestInvoke: true,
-      }
+      },
     );
 
     const usage = v1.addResource("usage");

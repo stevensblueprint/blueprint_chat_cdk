@@ -24,7 +24,7 @@ const docClient = DynamoDBDocumentClient.from(dynamodbClient);
 async function verifyStsCredentials(
   accessKeyId: string,
   secretAccessKey: string,
-  sessionToken: string
+  sessionToken: string,
 ): Promise<string | null> {
   const client = new STSClient({
     region: "us-east-1",
@@ -52,7 +52,7 @@ async function verifyStsCredentials(
 }
 
 async function verifyCognitoCredentials(
-  accessToken: string
+  accessToken: string,
 ): Promise<string | null> {
   const verifier = CognitoJwtVerifier.create({
     userPoolId: "us-east-1_0QwnhHQ9T",
@@ -73,7 +73,7 @@ async function verifyCognitoCredentials(
 function calculateCostFromTokens(
   inputTokens: number,
   outputTokens: number,
-  modelId: string
+  modelId: string,
 ): number {
   switch (modelId) {
     case "anthropic.claude-3-haiku-20240307-v1:0":
@@ -112,7 +112,7 @@ exports.handler = awslambda.streamifyResponse(
         ? await verifyStsCredentials(
             auth.accessKey,
             auth.secretKey,
-            auth.sessionToken
+            auth.sessionToken,
           )
         : await verifyCognitoCredentials(auth.accessToken);
 
@@ -138,7 +138,7 @@ exports.handler = awslambda.streamifyResponse(
       ) {
         console.error("Invalid modelId: ", modelId);
         responseStream.write(
-          JSON.stringify({ error: "Invalid model!" }) + "\n"
+          JSON.stringify({ error: "Invalid model!" }) + "\n",
         );
         responseStream.end();
         return;
@@ -156,7 +156,7 @@ exports.handler = awslambda.streamifyResponse(
               userArn,
               month_year: monthYear,
             },
-          })
+          }),
         )
       ).Item;
 
@@ -182,7 +182,7 @@ exports.handler = awslambda.streamifyResponse(
 
       console.log(
         "Sending command to Bedrock: ",
-        JSON.stringify(command, null, 2)
+        JSON.stringify(command, null, 2),
       );
       const response = await bedrockClient.send(command);
 
@@ -203,7 +203,7 @@ exports.handler = awslambda.streamifyResponse(
       const cost = calculateCostFromTokens(
         usage.inputTokens,
         usage.outputTokens,
-        modelId
+        modelId,
       );
 
       await docClient.send(
@@ -216,7 +216,7 @@ exports.handler = awslambda.streamifyResponse(
             usage,
             cost,
           },
-        })
+        }),
       );
 
       await docClient.send(
@@ -228,7 +228,7 @@ exports.handler = awslambda.streamifyResponse(
             ":one": 1,
             ":cost": cost,
           },
-        })
+        }),
       );
     } catch (err: any) {
       console.error("Error processing request:", err);
@@ -238,9 +238,9 @@ exports.handler = awslambda.streamifyResponse(
           error: "Internal Server Error",
           message: err.message,
           stack: err.stack,
-        }) + "\n"
+        }) + "\n",
       );
       responseStream.end();
     }
-  }
+  },
 );
