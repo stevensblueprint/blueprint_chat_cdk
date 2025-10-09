@@ -86,20 +86,19 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       })
     );
 
-    const api = new apigw.RestApi(this, "BedApiGatewayApi", {
-      restApiName: "bedrock-gateway-api",
-      description: "API Gateway for Bedrock proxy Lambda function",
+    const api = new apigw.RestApi(this, "BedUsageApi", {
+      restApiName: "bedrock-usage-api",
+      description: "API Gateway for monthly usage statistics",
       deployOptions: {
         stageName: "prod",
         throttlingRateLimit: 20,
       },
       defaultCorsPreflightOptions: {
         allowOrigins: apigw.Cors.ALL_ORIGINS,
-        allowMethods: ["POST", "OPTIONS"],
+        allowMethods: ["GET", "OPTIONS"],
         allowHeaders: [
           "Content-Type",
           "Authorization",
-          "x-api-key",
           "Accept",
           "Origin",
           "X-Requested-With",
@@ -115,7 +114,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         "Access-Control-Allow-Origin": "'*'",
         "Access-Control-Allow-Headers":
           "'Content-Type,Authorization,x-api-key,Accept,Origin,X-Requested-With'",
-        "Access-Control-Allow-Methods": "'POST,OPTIONS'",
+        "Access-Control-Allow-Methods": "'GET,OPTIONS'",
       },
     });
 
@@ -125,7 +124,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         "Access-Control-Allow-Origin": "'*'",
         "Access-Control-Allow-Headers":
           "'Content-Type,Authorization,x-api-key,Accept,Origin,X-Requested-With'",
-        "Access-Control-Allow-Methods": "'POST,OPTIONS'",
+        "Access-Control-Allow-Methods": "'GET,OPTIONS'",
       },
     });
 
