@@ -149,7 +149,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
       cors: {
         allowedOrigins: ["*"],
-        allowedHeaders: ["Authorization", "Content-Type"],
+        allowedHeaders: ["*"],
         allowedMethods: [lambda.HttpMethod.POST],
       },
     });
