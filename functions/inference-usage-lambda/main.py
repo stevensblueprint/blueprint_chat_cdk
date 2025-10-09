@@ -4,24 +4,28 @@ import boto3
 from datetime import datetime
 from datetime import datetime
 
+# Environment variables and instantiate DynamoDB client
 dynamodb = boto3.resource("dynamodb")
 MONTHLY_USAGE_TABLE = os.environ["MONTHLY_USAGE_TABLE"]
 MONTHLY_LIMIT = float(os.environ["MONTHLY_LIMIT"])
 
 monthly_tbl = dynamodb.Table(MONTHLY_USAGE_TABLE)
 
-
 def handler(event, _):
     now = datetime.now()
     month_year = now.strftime("%m_%Y")
 
     headers = event.get("headers", "{}")
+    # Get userArn (only username)
+    # For example, if ARN = arn:aws:iam::245279632520:user/byen, userArn = byen
     user_arn = headers.get("userArn")
 
+    # Look up user's monthly usage
     response = monthly_tbl.get_item(Key={"userArn": user_arn, "month_year": month_year})
 
     item = response.get("Item")
 
+    # Return current usage and monthly limit
     if item:
         monthly_usage = item.get("cost")
         return {

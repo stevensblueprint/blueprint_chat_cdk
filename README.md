@@ -1,14 +1,8 @@
-# Welcome to your CDK TypeScript project
+# Blueprint Chat CDK
 
-This is a blank project for CDK development with TypeScript.
+This is a CDK project for Stevens Blueprint that:
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+1. Exposes an endpoint for clients to call AWS Bedrock via an inference proxy
+2. Exposes an endpoint for clients to retrieve a user's current monthly usage and monthly limit
 
-## Useful commands
-
-- `npm run build` compile typescript to js
-- `npm run watch` watch for changes and compile
-- `npm run test` perform the jest unit tests
-- `npx cdk deploy` deploy this stack to your default AWS account/region
-- `npx cdk diff` compare deployed stack with current state
-- `npx cdk synth` emits the synthesized CloudFormation template
+## Bedrock Inference Proxy
