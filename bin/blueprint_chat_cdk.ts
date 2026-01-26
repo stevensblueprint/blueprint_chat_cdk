@@ -11,4 +11,8 @@ new BlueprintChatCdkStack(app, "BlueprintChatCdkStack", {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
   },
+  NOTION_API_KEY: process.env.NOTION_API_KEY || "",
+  DISCORD_API_KEY: process.env.DISCORD_API_KEY || "",
+  DRIVE_API_KEY: process.env.DRIVE_API_KEY || "",
+  WIKI_API_KEY: process.env.WIKI_API_KEY || "",
 });
