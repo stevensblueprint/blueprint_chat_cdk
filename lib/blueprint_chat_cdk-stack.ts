@@ -24,7 +24,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     });
 
     // Notion
-    new WebhookLambdaConstruct(this, "WebhookLambda", {
+    new WebhookLambdaConstruct(this, "NotionWebhookLambda", {
       codePath: "functions/webhook-listener-notion-lambda",
       description:
         "Lambda function to handle Notion webhooks and store documents in S3",
