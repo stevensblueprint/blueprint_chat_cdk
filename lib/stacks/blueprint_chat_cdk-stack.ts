@@ -1,8 +1,8 @@
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
-import LambdaLlmProxyConstruct from "./constructs/lambda_llm_proxy_construct";
-import WebhookLambdaConstruct from "./constructs/webhook_lamda_construct";
+import LambdaLlmProxyConstruct from "../constructs/lambda_llm_proxy_construct";
+import WebhookLambdaConstruct from "../constructs/webhook_lamda_construct";
 
 export interface BlueprintChatCdkStackProps extends cdk.StackProps {
   NOTION_API_KEY: string;
