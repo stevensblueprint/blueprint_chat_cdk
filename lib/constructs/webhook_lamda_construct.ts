@@ -1,5 +1,6 @@
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as cdk from "aws-cdk-lib";
 import * as path from "path";
 import { Construct } from "constructs";
@@ -25,6 +26,11 @@ export interface WebhookLambdaConstructProps {
    * Environment Variables
    */
   environmentVariables: { [key: string]: string };
+
+  /**
+   * Webhook Events Queue
+   */
+  webhookEventsQueue: sqs.IQueue;
 }
 
 export default class WebhookLambdaConstruct extends Construct {
@@ -45,11 +51,13 @@ export default class WebhookLambdaConstruct extends Construct {
       environment: {
         ...props.environmentVariables,
         DOCUMENT_BUCKET: props.documentBucket.bucketName,
+        WEBHOOK_EVENTS_QUEUE_URL: props.webhookEventsQueue.queueUrl, // sqs.IQueue's url
       },
       description: props.description,
     });
 
     props.documentBucket.grantReadWrite(webhookListenerFn);
+    props.webhookEventsQueue.grantSendMessages(webhookListenerFn);
 
     const fnUrl = webhookListenerFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
