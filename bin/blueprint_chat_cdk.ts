@@ -12,7 +12,7 @@ const env = {
   region: process.env.CDK_DEFAULT_REGION,
 };
 
-new BlueprintChatCdkStack(app, "blueprint-chat-cdk", {
+new BlueprintChatCdkStack(app, "blueprint-chat-cdk-miguel", {
   description: "Blueprint Chat CDK Stack",
   env: env,
   NOTION_API_KEY: process.env.NOTION_API_KEY || "",
@@ -24,7 +24,7 @@ new BlueprintChatCdkStack(app, "blueprint-chat-cdk", {
 new EmailStack(app, "email-stack", {
   description: "Email Stack for Blueprint Chat",
   env: env,
-  bucketName: `${cdk.Stack.of(app).account.toLowerCase()}-blueprint-emails`,
+  bucketName: `blueprint-emails`,
 });
 
 app.synth();
