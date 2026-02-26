@@ -7,7 +7,7 @@ import { EmailStack } from "../lib/stacks/email-stack";
 dotenv.config();
 
 const app = new cdk.App();
-const env = {
+const env: cdk.Environment = {
   account: process.env.CDK_DEFAULT_ACCOUNT,
   region: process.env.CDK_DEFAULT_REGION,
 };
@@ -24,7 +24,7 @@ new BlueprintChatCdkStack(app, "blueprint-chat-cdk-miguel", {
 new EmailStack(app, "email-stack", {
   description: "Email Stack for Blueprint Chat",
   env: env,
-  bucketName: `blueprint-emails`,
+  bucketName: `blueprint-emails-${env.account}-${env.region}`,
 });
 
 app.synth();
