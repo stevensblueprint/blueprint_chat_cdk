@@ -12,7 +12,7 @@ const env: cdk.Environment = {
   region: process.env.CDK_DEFAULT_REGION,
 };
 
-new BlueprintChatCdkStack(app, "blueprint-chat-cdk-miguel", {
+new BlueprintChatCdkStack(app, "blueprint-chat-cdk", {
   description: "Blueprint Chat CDK Stack",
   env: env,
   NOTION_API_KEY: process.env.NOTION_API_KEY || "",
