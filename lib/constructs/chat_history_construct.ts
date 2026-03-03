@@ -44,7 +44,10 @@ export default class ChatHistoryConstruct extends Construct {
 
     // Chat History Lambda implementation
     this.chatHistoryLambda = new NodejsFunction(this, "ChatHistoryLambda", {
-      entry: path.join(__dirname, "../../functions/chat-history-lambda/index.ts"),
+      entry: path.join(
+        __dirname,
+        "../../functions/chat-history-lambda/index.ts",
+      ),
       handler: "handler",
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,

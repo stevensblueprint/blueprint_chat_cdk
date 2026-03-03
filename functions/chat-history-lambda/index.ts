@@ -57,7 +57,10 @@ export const handler = async (event: any) => {
         }),
       );
       if (!s3Response.Body) {
-        return { statusCode: 404, body: JSON.stringify({ error: "Conversation not found" }) };
+        return {
+          statusCode: 404,
+          body: JSON.stringify({ error: "Conversation not found" }),
+        };
       }
       const threadData = await s3Response.Body.transformToString();
       return { statusCode: 200, body: threadData };
@@ -67,11 +70,17 @@ export const handler = async (event: any) => {
     // - Creates a new conversation
     if (httpMethod === "POST" && path === "/conversations") {
       if (!body) {
-        return { statusCode: 400, body: JSON.stringify({ error: "Missing request body" }) };
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ error: "Missing request body" }),
+        };
       }
       const { initialMessage } = JSON.parse(body);
       if (!initialMessage) {
-        return { statusCode: 400, body: JSON.stringify({ error: "Missing initialMessage" }) };
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ error: "Missing initialMessage" }),
+        };
       }
       const conversationId = uuidv4();
       const timestamp = new Date().toISOString();
@@ -118,7 +127,9 @@ export const handler = async (event: any) => {
           }),
         );
       } catch (error) {
-        await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: s3Key }));
+        await s3Client.send(
+          new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: s3Key }),
+        );
         throw error;
       }
 
@@ -127,7 +138,10 @@ export const handler = async (event: any) => {
 
     // POST /conversations/conversationId
     // - Append a turn to the specific conversation for a given conversationId
-    if ( httpMethod === "POST" && path.match(/^\/conversations\/[^\/]+\/turns$/)) {
+    if (
+      httpMethod === "POST" &&
+      path.match(/^\/conversations\/[^\/]+\/turns$/)
+    ) {
       const conversationId = path.split("/")[2];
       const { message, assistantMessage } = JSON.parse(body);
       const s3Key = `users/${userId}/conversations/${conversationId}/thread.json`;
@@ -138,7 +152,10 @@ export const handler = async (event: any) => {
         new GetObjectCommand({ Bucket: BUCKET_NAME, Key: s3Key }),
       );
       if (!s3Object.Body) {
-        return { statusCode: 404, body: JSON.stringify( { error: "Conversation not found" }) };
+        return {
+          statusCode: 404,
+          body: JSON.stringify({ error: "Conversation not found" }),
+        };
       }
       const thread = JSON.parse(await s3Object.Body.transformToString());
       const expectedUpdatedAt = thread.updatedAt;
@@ -151,18 +168,20 @@ export const handler = async (event: any) => {
             Key: { userId, conversationId },
             UpdateExpression: "set updatedAt = :newTime",
             ConditionExpression: "updatedAt = :expectedTime",
-            ExpressionAttributeValues: { 
-                ":newTime": newTimestamp,
-                ":expectedTime": expectedUpdatedAt 
+            ExpressionAttributeValues: {
+              ":newTime": newTimestamp,
+              ":expectedTime": expectedUpdatedAt,
             },
           }),
         );
       } catch (error: any) {
         if (error.name === "ConditionalCheckFailedException") {
-            return { 
-                statusCode: 409,
-                body: JSON.stringify({ error: "Concurrent modification detected. Please retry." }) 
-            };
+          return {
+            statusCode: 409,
+            body: JSON.stringify({
+              error: "Concurrent modification detected. Please retry.",
+            }),
+          };
         }
         throw error;
       }
