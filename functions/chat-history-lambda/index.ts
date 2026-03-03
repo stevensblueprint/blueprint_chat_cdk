@@ -23,95 +23,102 @@ const BUCKET_NAME = process.env.S3_BUCKET!;
 
 export const handler = async (event: any) => {
   const { httpMethod, path, body, queryStringParameters } = event;
-  const userId =
-    queryStringParameters?.userId || JSON.parse(body || "{}").userId;
+  const userId = queryStringParameters?.userId || JSON.parse(body || "{}").userId;
 
   if (!userId) {
-    return { statusCode: 400, body: "Missing userId" };
+    return { statusCode: 400, body: JSON.stringify({ error: "Missing userId" }) };
   }
 
   try {
-    // GET /conversations?userId=...
-    // - List conversations for a given userId
+    // GET /conversations
     if (httpMethod === "GET" && path === "/conversations") {
-      const response = await docClient.send(
-        new QueryCommand({
-          TableName: TABLE_NAME,
-          KeyConditionExpression: "userId = :uid",
-          ExpressionAttributeValues: { ":uid": userId },
-        }),
-      );
-      return { statusCode: 200, body: JSON.stringify(response.Items) };
+      try {
+        const response = await docClient.send(
+          new QueryCommand({
+            TableName: TABLE_NAME,
+            KeyConditionExpression: "userId = :uid",
+            ExpressionAttributeValues: { ":uid": userId },
+          }),
+        );
+        return { statusCode: 200, body: JSON.stringify(response.Items) };
+      } catch (error) {
+        console.error("DynamoDB QueryCommand failed:", error);
+        return { statusCode: 502, body: JSON.stringify({ error: "Failed to fetch conversations from database." }) };
+      }
     }
 
-    // GET /conversations/conversationId?userId=...
-    // - Get a specific conversation for a given userId and conversationId
+    // GET /conversations/{conversationId}
     if (httpMethod === "GET" && path.match(/^\/conversations\/[^\/]+$/)) {
       const conversationId = path.split("/")[2];
       const s3Key = `users/${userId}/conversations/${conversationId}/thread.json`;
 
-      const s3Response = await s3Client.send(
-        new GetObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: s3Key,
-        }),
-      );
-      if (!s3Response.Body) {
-        return {
-          statusCode: 404,
-          body: JSON.stringify({ error: "Conversation not found" }),
-        };
+      try {
+        const s3Response = await s3Client.send(
+          new GetObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: s3Key,
+          }),
+        );
+        
+        if (!s3Response.Body) {
+          return { statusCode: 404, body: JSON.stringify({ error: "Conversation data is empty." }) };
+        }
+        const threadData = await s3Response.Body.transformToString();
+        return { statusCode: 200, body: threadData };
+        
+      } catch (error: any) {
+        console.error("S3 GetObjectCommand failed:", error);
+        // Explicitly check if the file is missing in S3
+        if (error.name === "NoSuchKey") {
+          return { statusCode: 404, body: JSON.stringify({ error: "Conversation not found." }) };
+        }
+        return { statusCode: 502, body: JSON.stringify({ error: "Failed to retrieve conversation from storage." }) };
       }
-      const threadData = await s3Response.Body.transformToString();
-      return { statusCode: 200, body: threadData };
     }
 
     // POST /conversations
-    // - Creates a new conversation
     if (httpMethod === "POST" && path === "/conversations") {
-      if (!body) {
-        return {
-          statusCode: 400,
-          body: JSON.stringify({ error: "Missing request body" }),
-        };
-      }
-      const { initialMessage } = JSON.parse(body);
-      if (!initialMessage) {
-        return {
-          statusCode: 400,
-          body: JSON.stringify({ error: "Missing initialMessage" }),
-        };
-      }
-      const conversationId = uuidv4();
+      if (!body) return { statusCode: 400, body: JSON.stringify({ error: "Missing request body" }) };
+      
+      const parsedBody = JSON.parse(body);
+      if (!parsedBody.initialMessage) return { statusCode: 400, body: JSON.stringify({ error: "Missing initialMessage" }) };
+      
+      const conversationId = parsedBody.conversationId || uuidv4();
+      const title = parsedBody.title || "New Conversation";
+      const initialTurnId = parsedBody.turnId || uuidv4();
+      
       const timestamp = new Date().toISOString();
       const s3Key = `users/${userId}/conversations/${conversationId}/thread.json`;
 
       const initialThread = {
         conversationId,
         userId,
-        title: "New Conversation",
+        title,
         createdAt: timestamp,
         updatedAt: timestamp,
-        turns: [
-          {
-            turnId: uuidv4(),
+        turns: [{
+            turnId: initialTurnId,
             createdAt: timestamp,
-            messages: { user: { content: initialMessage } },
-          },
-        ],
+            messages: { user: { content: parsedBody.initialMessage } },
+        }],
       };
 
-      // Write full payload to S3
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: s3Key,
-          Body: JSON.stringify(initialThread),
-          ContentType: "application/json",
-        }),
-      );
+      // Write to S3
+      try {
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: s3Key,
+            Body: JSON.stringify(initialThread),
+            ContentType: "application/json",
+          }),
+        );
+      } catch (error) {
+        console.error("S3 PutObjectCommand failed:", error);
+        return { statusCode: 502, body: JSON.stringify({ error: "Failed to initialize conversation storage." }) };
+      }
 
-      // Write pointer to DynamoDB
+      // Write to DynamoDB
       try {
         await docClient.send(
           new PutCommand({
@@ -119,7 +126,7 @@ export const handler = async (event: any) => {
             Item: {
               userId,
               conversationId,
-              title: "New Conversation",
+              title,
               createdAt: timestamp,
               updatedAt: timestamp,
               S3Key: s3Key,
@@ -127,40 +134,43 @@ export const handler = async (event: any) => {
           }),
         );
       } catch (error) {
-        await s3Client.send(
-          new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: s3Key }),
-        );
-        throw error;
+        console.error("DynamoDB PutCommand failed. Rolling back S3:", error);
+        // Rollback the S3 file to prevent dangling pointers
+        try {
+            await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: s3Key }));
+        } catch (rollbackError) {
+            console.error("CRITICAL: Failed to rollback S3 object after DynamoDB failure:", rollbackError);
+        }
+        return { statusCode: 502, body: JSON.stringify({ error: "Failed to register conversation in database." }) };
       }
 
       return { statusCode: 201, body: JSON.stringify(initialThread) };
     }
 
-    // POST /conversations/conversationId
-    // - Append a turn to the specific conversation for a given conversationId
-    if (
-      httpMethod === "POST" &&
-      path.match(/^\/conversations\/[^\/]+\/turns$/)
-    ) {
+    // POST /conversations/{conversationId}/turns
+    if (httpMethod === "POST" && path.match(/^\/conversations\/[^\/]+\/turns$/)) {
       const conversationId = path.split("/")[2];
-      const { message, assistantMessage } = JSON.parse(body);
+      const parsedBody = JSON.parse(body);
       const s3Key = `users/${userId}/conversations/${conversationId}/thread.json`;
       const newTimestamp = new Date().toISOString();
 
-      // Fetch existing thread from S3
-      const s3Object = await s3Client.send(
-        new GetObjectCommand({ Bucket: BUCKET_NAME, Key: s3Key }),
-      );
-      if (!s3Object.Body) {
-        return {
-          statusCode: 404,
-          body: JSON.stringify({ error: "Conversation not found" }),
-        };
+      // Fetch from S3
+      let thread;
+      try {
+        const s3Object = await s3Client.send(
+          new GetObjectCommand({ Bucket: BUCKET_NAME, Key: s3Key })
+        );
+        if (!s3Object.Body) throw new Error("Empty body returned from S3");
+        thread = JSON.parse(await s3Object.Body.transformToString());
+      } catch (error: any) {
+        console.error("S3 GetObjectCommand failed during append:", error);
+        if (error.name === "NoSuchKey") return { statusCode: 404, body: JSON.stringify({ error: "Conversation not found." }) };
+        return { statusCode: 502, body: JSON.stringify({ error: "Failed to read conversation from storage." }) };
       }
-      const thread = JSON.parse(await s3Object.Body.transformToString());
+
       const expectedUpdatedAt = thread.updatedAt;
 
-      // Update DynamoDB only if the timestamp hasn't changed
+      // Lock and Update DynamoDB
       try {
         await docClient.send(
           new UpdateCommand({
@@ -176,69 +186,63 @@ export const handler = async (event: any) => {
         );
       } catch (error: any) {
         if (error.name === "ConditionalCheckFailedException") {
-          return {
-            statusCode: 409,
-            body: JSON.stringify({
-              error: "Concurrent modification detected. Please retry.",
-            }),
-          };
+          return { statusCode: 409, body: JSON.stringify({ error: "Concurrent modification detected. Please retry." }) };
         }
-        throw error;
+        console.error("DynamoDB UpdateCommand failed:", error);
+        return { statusCode: 502, body: JSON.stringify({ error: "Failed to update database pointer." }) };
       }
 
+      // Save back to S3
       const newTurn = {
-        turnId: uuidv4(),
+        turnId: parsedBody.turnId || uuidv4(),
         createdAt: newTimestamp,
         messages: {
-          user: { content: message },
-          assistant: { content: assistantMessage || "" },
+          user: { content: parsedBody.message },
+          assistant: { content: parsedBody.assistantMessage || "" },
         },
       };
       thread.turns.push(newTurn);
       thread.updatedAt = newTimestamp;
 
-      // Save updated thread back to S3
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: s3Key,
-          Body: JSON.stringify(thread),
-          ContentType: "application/json",
-        }),
-      );
-
-      // Update DynamoDB updatedAt pointer
-      await docClient.send(
-        new UpdateCommand({
-          TableName: TABLE_NAME,
-          Key: { userId, conversationId },
-          UpdateExpression: "set updatedAt = :u",
-          ExpressionAttributeValues: { ":u": timestamp },
-        }),
-      );
+      try {
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: s3Key,
+            Body: JSON.stringify(thread),
+            ContentType: "application/json",
+          }),
+        );
+      } catch (error) {
+        console.error("S3 PutObjectCommand failed during append:", error);
+        return { statusCode: 502, body: JSON.stringify({ error: "Database updated, but failed to write payload to storage." }) };
+      }
 
       return { statusCode: 200, body: JSON.stringify(newTurn) };
     }
 
-    // DELETE /conversations/conversationId
-    // - Deletes the conversation for a given conversationId
+    // DELETE /conversations/{conversationId}
     if (httpMethod === "DELETE" && path.match(/^\/conversations\/[^\/]+$/)) {
       const conversationId = path.split("/")[2];
       const s3Key = `users/${userId}/conversations/${conversationId}/thread.json`;
 
-      await s3Client.send(
-        new DeleteObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: s3Key,
-        }),
-      );
+      // Delete from S3
+      try {
+        await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: s3Key }));
+      } catch (error) {
+        console.error("S3 DeleteObjectCommand failed:", error);
+        return { statusCode: 502, body: JSON.stringify({ error: "Failed to delete conversation from storage." }) };
+      }
 
-      await docClient.send(
-        new DeleteCommand({
-          TableName: TABLE_NAME,
-          Key: { userId, conversationId },
-        }),
-      );
+      // Delete from DynamoDB
+      try {
+        await docClient.send(
+          new DeleteCommand({ TableName: TABLE_NAME, Key: { userId, conversationId } })
+        );
+      } catch (error) {
+        console.error("DynamoDB DeleteCommand failed:", error);
+        return { statusCode: 502, body: JSON.stringify({ error: "Storage deleted, but failed to remove database index." }) };
+      }
 
       return {
         statusCode: 200,
@@ -246,12 +250,11 @@ export const handler = async (event: any) => {
       };
     }
 
-    return { statusCode: 404, body: "Not Found" };
+    return { statusCode: 404, body: JSON.stringify({ error: "Endpoint Not Found" }) };
+
   } catch (error) {
-    console.error(error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Internal Server Error" }),
-    };
+    // Catch critical errors outside of requests
+    console.error("Critical unexpected error:", error);
+    return { statusCode: 500, body: JSON.stringify({ error: "Internal Server Error" }) };
   }
 };
