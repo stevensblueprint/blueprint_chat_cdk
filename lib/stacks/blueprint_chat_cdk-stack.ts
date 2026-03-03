@@ -3,6 +3,7 @@ import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import LambdaLlmProxyConstruct from "../constructs/lambda_llm_proxy_construct";
 import WebhookLambdaConstruct from "../constructs/webhook_lamda_construct";
+import ChatHistoryConstruct from "../constructs/chat_history_construct";
 
 export interface BlueprintChatCdkStackProps extends cdk.StackProps {
   NOTION_API_KEY: string;
@@ -17,6 +18,11 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     const documentBucket = new s3.Bucket(this, "DocumentBucket", {
       bucketName: `${cdk.Stack.of(this).account.toLowerCase()}-blueprint-chat-documents`,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    new ChatHistoryConstruct(this, "ChatHistory", {
+      s3BucketName: "blueprint-chat-history",
+      chatHistoryTableName: "blueprint-chat-index",
     });
 
     new LambdaLlmProxyConstruct(this, "LambdaLlmProxy", {
