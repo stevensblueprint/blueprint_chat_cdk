@@ -26,10 +26,17 @@ export const handler = async (event: any) => {
   const userId =
     queryStringParameters?.userId || JSON.parse(body || "{}").userId;
 
-  if (!userId) {
+  if (!userId || typeof userId !== "string") {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: "Missing userId" }),
+      body: JSON.stringify({ error: "Missing or invalid userId format." }),
+    };
+  }
+
+  if (!/^[a-zA-Z0-9-]+$/.test(userId) || userId.length > 50) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: "Malformed userId" }),
     };
   }
 
