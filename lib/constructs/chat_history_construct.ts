@@ -20,11 +20,11 @@ export default class ChatHistoryConstruct extends Construct {
 
     // S3 Bucket Data Model
     this.s3Bucket = new s3.Bucket(this, "ChatHistoryBucket", {
-        bucketName: `${cdk.Stack.of(this).account.toLowerCase()}-${props.s3BucketName}`,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
-        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-        encryption: s3.BucketEncryption.S3_MANAGED,
-        enforceSSL: true,
+      bucketName: `${cdk.Stack.of(this).account.toLowerCase()}-${props.s3BucketName}`,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
     });
 
     // DynamoDB Data Model
@@ -34,9 +34,9 @@ export default class ChatHistoryConstruct extends Construct {
         name: "userId",
         type: dynamodb.AttributeType.STRING,
       },
-      sortKey: { 
-        name: "conversationId", 
-        type: dynamodb.AttributeType.STRING 
+      sortKey: {
+        name: "conversationId",
+        type: dynamodb.AttributeType.STRING,
       },
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       billing: dynamodb.Billing.onDemand(),
@@ -46,7 +46,9 @@ export default class ChatHistoryConstruct extends Construct {
     this.chatHistoryLambda = new lambda.Function(this, "ChatHistoryLambda", {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: "index.handler",
-      code: lambda.Code.fromAsset(path.join(__dirname, "../../functions/chat-history-lambda")),
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, "../../functions/chat-history-lambda"),
+      ),
       environment: {
         DYNAMODB_TABLE: this.chatHistoryTable.tableName,
         S3_BUCKET: this.s3Bucket.bucketName,
@@ -61,7 +63,7 @@ export default class ChatHistoryConstruct extends Construct {
       value: this.chatHistoryTable.tableName,
       exportName: "ChatHistoryTableName",
     });
-    
+
     new cdk.CfnOutput(this, "ChatHistoryBucketName", {
       value: this.s3Bucket.bucketName,
       exportName: "ChatHistoryBucketName",
