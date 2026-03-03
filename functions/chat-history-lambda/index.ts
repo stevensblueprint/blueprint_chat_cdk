@@ -56,32 +56,26 @@ export const handler = async (event: any) => {
           Key: s3Key,
         }),
       );
-      const threadData = await s3Response.Body?.transformToString();
+      if (!s3Response.Body) {
+        return { statusCode: 404, body: JSON.stringify({ error: "Conversation not found" }) };
+      }
+      const threadData = await s3Response.Body.transformToString();
       return { statusCode: 200, body: threadData };
     }
 
     // POST /conversations
     // - Creates a new conversation
     if (httpMethod === "POST" && path === "/conversations") {
+      if (!body) {
+        return { statusCode: 400, body: JSON.stringify({ error: "Missing request body" }) };
+      }
       const { initialMessage } = JSON.parse(body);
+      if (!initialMessage) {
+        return { statusCode: 400, body: JSON.stringify({ error: "Missing initialMessage" }) };
+      }
       const conversationId = uuidv4();
       const timestamp = new Date().toISOString();
       const s3Key = `users/${userId}/conversations/${conversationId}/thread.json`;
-
-      // Write pointer to DynamoDB
-      await docClient.send(
-        new PutCommand({
-          TableName: TABLE_NAME,
-          Item: {
-            userId,
-            conversationId,
-            title: "New Conversation",
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            S3Key: s3Key,
-          },
-        }),
-      );
 
       const initialThread = {
         conversationId,
@@ -108,36 +102,81 @@ export const handler = async (event: any) => {
         }),
       );
 
+      // Write pointer to DynamoDB
+      try {
+        await docClient.send(
+          new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+              userId,
+              conversationId,
+              title: "New Conversation",
+              createdAt: timestamp,
+              updatedAt: timestamp,
+              S3Key: s3Key,
+            },
+          }),
+        );
+      } catch (error) {
+        await s3Client.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: s3Key }));
+        throw error;
+      }
+
       return { statusCode: 201, body: JSON.stringify(initialThread) };
     }
 
     // POST /conversations/conversationId
     // - Append a turn to the specific conversation for a given conversationId
-    if (
-      httpMethod === "POST" &&
-      path.match(/^\/conversations\/[^\/]+\/turns$/)
-    ) {
+    if ( httpMethod === "POST" && path.match(/^\/conversations\/[^\/]+\/turns$/)) {
       const conversationId = path.split("/")[2];
       const { message, assistantMessage } = JSON.parse(body);
       const s3Key = `users/${userId}/conversations/${conversationId}/thread.json`;
-      const timestamp = new Date().toISOString();
+      const newTimestamp = new Date().toISOString();
 
       // Fetch existing thread from S3
       const s3Object = await s3Client.send(
         new GetObjectCommand({ Bucket: BUCKET_NAME, Key: s3Key }),
       );
-      const thread = JSON.parse(await s3Object.Body!.transformToString());
+      if (!s3Object.Body) {
+        return { statusCode: 404, body: JSON.stringify( { error: "Conversation not found" }) };
+      }
+      const thread = JSON.parse(await s3Object.Body.transformToString());
+      const expectedUpdatedAt = thread.updatedAt;
+
+      // Update DynamoDB only if the timestamp hasn't changed
+      try {
+        await docClient.send(
+          new UpdateCommand({
+            TableName: TABLE_NAME,
+            Key: { userId, conversationId },
+            UpdateExpression: "set updatedAt = :newTime",
+            ConditionExpression: "updatedAt = :expectedTime",
+            ExpressionAttributeValues: { 
+                ":newTime": newTimestamp,
+                ":expectedTime": expectedUpdatedAt 
+            },
+          }),
+        );
+      } catch (error: any) {
+        if (error.name === "ConditionalCheckFailedException") {
+            return { 
+                statusCode: 409,
+                body: JSON.stringify({ error: "Concurrent modification detected. Please retry." }) 
+            };
+        }
+        throw error;
+      }
 
       const newTurn = {
         turnId: uuidv4(),
-        createdAt: timestamp,
+        createdAt: newTimestamp,
         messages: {
           user: { content: message },
           assistant: { content: assistantMessage || "" },
         },
       };
       thread.turns.push(newTurn);
-      thread.updatedAt = timestamp;
+      thread.updatedAt = newTimestamp;
 
       // Save updated thread back to S3
       await s3Client.send(

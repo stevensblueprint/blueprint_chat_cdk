@@ -1,7 +1,7 @@
 import { Construct } from "constructs";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as s3 from "aws-cdk-lib/aws-s3";
-import * as lambda from "aws-cdk-lib/aws-lambda";
+import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as cdk from "aws-cdk-lib";
 import * as path from "path";
 
@@ -13,7 +13,7 @@ export interface ChatHistoryConstructProps {
 export default class ChatHistoryConstruct extends Construct {
   public readonly chatHistoryTable: dynamodb.ITable;
   public readonly s3Bucket: s3.IBucket;
-  public readonly chatHistoryLambda: lambda.Function;
+  public readonly chatHistoryLambda: NodejsFunction;
 
   constructor(scope: Construct, id: string, props: ChatHistoryConstructProps) {
     super(scope, id);
@@ -43,12 +43,11 @@ export default class ChatHistoryConstruct extends Construct {
     });
 
     // Chat History Lambda implementation
-    this.chatHistoryLambda = new lambda.Function(this, "ChatHistoryLambda", {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: "index.handler",
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, "../../functions/chat-history-lambda"),
-      ),
+    this.chatHistoryLambda = new NodejsFunction(this, "ChatHistoryLambda", {
+      entry: path.join(__dirname, "../../functions/chat-history-lambda/index.ts"),
+      handler: "handler",
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
       environment: {
         DYNAMODB_TABLE: this.chatHistoryTable.tableName,
         S3_BUCKET: this.s3Bucket.bucketName,
