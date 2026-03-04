@@ -57,8 +57,7 @@ export default class WebhookLambdaConstruct extends Construct {
     });
 
     props.documentBucket.grantReadWrite(webhookListenerFn);
-    props.ingestionQueue.grantSendMessages(webhookListenerFn);  
-
+    props.ingestionQueue.grantSendMessages(webhookListenerFn);
 
     const fnUrl = webhookListenerFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,

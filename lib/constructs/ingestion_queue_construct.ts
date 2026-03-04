@@ -27,7 +27,6 @@ export interface IngestionQueueConstructProps {
  * IngestionQueueConstruct
  */
 export class IngestionQueueConstruct extends Construct {
-  
   public readonly queue: sqs.Queue;
 
   public readonly dlq: sqs.Queue;
@@ -48,7 +47,7 @@ export class IngestionQueueConstruct extends Construct {
       retentionPeriod = cdk.Duration.days(4),
     } = props;
 
-    // Dead-Letter Queue 
+    // Dead-Letter Queue
     this.dlq = new sqs.Queue(this, "IngestionDLQ", {
       queueName: "IngestionDLQ",
       retentionPeriod: cdk.Duration.days(14),
