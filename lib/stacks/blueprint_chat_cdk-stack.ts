@@ -1,11 +1,11 @@
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as cdk from "aws-cdk-lib";
-import * as apigw from "aws-cdk-lib/aws-apigateway";
 import { Construct } from "constructs";
 import LambdaLlmProxyConstruct from "../constructs/lambda_llm_proxy_construct";
 import WebhookLambdaConstruct from "../constructs/webhook_lamda_construct";
 import ChatHistoryConstruct from "../constructs/chat-history-construct";
-import AgentCoreConstruct from "../constructs/agentcore-construct";
+import LambdaIngestionConstruct from "../constructs/lambda_ingestion_construct";
 
 export interface BlueprintChatCdkStackProps extends cdk.StackProps {
   environment: string;
@@ -13,6 +13,7 @@ export interface BlueprintChatCdkStackProps extends cdk.StackProps {
   DISCORD_API_KEY: string;
   DRIVE_API_KEY: string;
   WIKI_API_KEY: string;
+  WIKI_BASE_URL: string;
 }
 export class BlueprintChatCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BlueprintChatCdkStackProps) {
@@ -82,26 +83,19 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       },
     });
 
-    const agentCore = new AgentCoreConstruct(this, "AgentCore", {
-      documentBucket: documentBucket,
-      chatHistoryTable: chatHistoryConstruct.chatHistoryTable,
+    const ingestionQueue = new sqs.Queue(this, "IngestionQueue", {
+      queueName: `blueprint-chat-ingestion${envSuffix}`,
+      visibilityTimeout: cdk.Duration.seconds(60),
+      retentionPeriod: cdk.Duration.days(4),
     });
 
-    lambdaLlmProxy.v1Resource
-      .addResource("agent")
-      .addMethod(
-        "POST",
-        new apigw.LambdaIntegration(agentCore.agentProxyFn, { proxy: true }),
-      );
-
-    new cdk.CfnOutput(this, "AgentApiUrl", {
-      value: `${lambdaLlmProxy.api.url}v1/agent`,
-      exportName: `AgentApiUrl${envSuffix}`,
-    });
-
-    new cdk.CfnOutput(this, "AgentStreamingUrl", {
-      value: agentCore.streamingUrl.url,
-      exportName: `AgentStreamingUrl${envSuffix}`,
+    new LambdaIngestionConstruct(this, "LambdaIngestionWorker", {
+      ingestionQueue,
+      documentBucket,
+      notionApiKey: props.NOTION_API_KEY,
+      driveApiKey: props.DRIVE_API_KEY,
+      wikiApiKey: props.WIKI_API_KEY,
+      wikiBaseUrl: props.WIKI_BASE_URL,
     });
   }
 }
