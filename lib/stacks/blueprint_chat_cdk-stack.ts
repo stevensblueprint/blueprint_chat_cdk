@@ -4,6 +4,7 @@ import * as sqs from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs";
 import LambdaLlmProxyConstruct from "../constructs/lambda_llm_proxy_construct";
 import WebhookLambdaConstruct from "../constructs/webhook_lamda_construct";
+import ChatHistoryConstruct from "../constructs/chat-history-construct";
 import LambdaIngestionConstruct from "../constructs/lambda_ingestion_construct";
 
 export interface BlueprintChatCdkStackProps extends cdk.StackProps {
@@ -17,7 +18,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     super(scope, id, props);
 
     const documentBucket = new s3.Bucket(this, "DocumentBucket", {
-      bucketName: `${cdk.Stack.of(this).account.toLowerCase()}-blueprint-chat-documents`,
+      bucketName: `blueprint-chat-documents-${cdk.Stack.of(this).account.toLowerCase()}`,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
@@ -57,6 +58,15 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         DRIVE_API_KEY: props.DRIVE_API_KEY,
       },
     });
+
+    const chatHistoryConstruct = new ChatHistoryConstruct(
+      this,
+      "ChatHistoryConstruct",
+      {
+        s3BucketName: "blueprint-chat-history",
+        chatHistoryTableName: "ChatHistory",
+      },
+    );
 
     // Wiki
     new WebhookLambdaConstruct(this, "WikiWebhookLambda", {
