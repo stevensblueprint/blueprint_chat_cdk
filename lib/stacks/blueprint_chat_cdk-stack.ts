@@ -1,8 +1,10 @@
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as cdk from "aws-cdk-lib";
+import * as sqs from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs";
 import LambdaLlmProxyConstruct from "../constructs/lambda_llm_proxy_construct";
 import WebhookLambdaConstruct from "../constructs/webhook_lamda_construct";
+import LambdaIngestionConstruct from "../constructs/lambda_ingestion_construct";
 
 export interface BlueprintChatCdkStackProps extends cdk.StackProps {
   NOTION_API_KEY: string;
@@ -66,5 +68,16 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         WIKI_API_KEY: props.WIKI_API_KEY,
       },
     });
+
+    //ingestion queue and worker
+    const ingestionQueue = new sqs.Queue(this, "IngestionQueue", {
+      visibilityTimeout: cdk.Duration.seconds(30),
+    });
+
+    new LambdaIngestionConstruct(this, "LambdaIngestion", {
+      ingestionQueue: ingestionQueue,
+    });
+
+    
   }
 }
