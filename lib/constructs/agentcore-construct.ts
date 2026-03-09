@@ -20,8 +20,7 @@ export default class AgentCoreConstruct extends Construct {
   constructor(scope: Construct, id: string, props: AgentCoreConstructProps) {
     super(scope, id);
 
-    const modelId =
-      props.modelId ?? "anthropic.claude-3-haiku-20240307-v1:0";
+    const modelId = props.modelId ?? "anthropic.claude-3-haiku-20240307-v1:0";
     const region = cdk.Stack.of(this).region;
 
     const artifact = agentcore.AgentRuntimeArtifact.fromAsset(
@@ -47,9 +46,7 @@ export default class AgentCoreConstruct extends Construct {
     runtime.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["bedrock:InvokeModel"],
-        resources: [
-          `arn:aws:bedrock:${region}::foundation-model/${modelId}`,
-        ],
+        resources: [`arn:aws:bedrock:${region}::foundation-model/${modelId}`],
       }),
     );
 
@@ -57,10 +54,7 @@ export default class AgentCoreConstruct extends Construct {
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: "main.handler",
       code: lambda.Code.fromAsset(
-        path.join(
-          __dirname,
-          "../../functions/agentcore-proxy-lambda",
-        ),
+        path.join(__dirname, "../../functions/agentcore-proxy-lambda"),
       ),
       timeout: cdk.Duration.seconds(60),
       environment: {

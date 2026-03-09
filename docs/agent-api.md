@@ -32,12 +32,13 @@ POST /v1/agent
 Content-Type: application/json
 ```
 
-| Field            | Type   | Required | Description                                                                                          |
-|------------------|--------|----------|------------------------------------------------------------------------------------------------------|
-| `prompt`         | string | Yes      | The user's message or question.                                                                      |
-| `conversationId` | string | No       | ID of an existing conversation. Omit on the first message — the agent will create and return one.   |
+| Field            | Type   | Required | Description                                                                                       |
+| ---------------- | ------ | -------- | ------------------------------------------------------------------------------------------------- |
+| `prompt`         | string | Yes      | The user's message or question.                                                                   |
+| `conversationId` | string | No       | ID of an existing conversation. Omit on the first message — the agent will create and return one. |
 
 **Example — first message:**
+
 ```json
 {
   "prompt": "What documents are available?"
@@ -45,6 +46,7 @@ Content-Type: application/json
 ```
 
 **Example — follow-up in the same conversation:**
+
 ```json
 {
   "prompt": "Can you summarize the first one?",
@@ -55,6 +57,7 @@ Content-Type: application/json
 #### Response
 
 **200 OK**
+
 ```json
 {
   "response": "There are 3 documents available: ...",
@@ -63,16 +66,18 @@ Content-Type: application/json
 ```
 
 | Field            | Type   | Description                                              |
-|------------------|--------|----------------------------------------------------------|
+| ---------------- | ------ | -------------------------------------------------------- |
 | `response`       | string | The agent's reply.                                       |
 | `conversationId` | string | Pass this back on subsequent calls to continue the chat. |
 
 **400 Bad Request** — `prompt` was empty or missing:
+
 ```json
 { "error": "prompt is required" }
 ```
 
 **500 Internal Server Error** — upstream failure:
+
 ```json
 { "error": "<error detail>" }
 ```
