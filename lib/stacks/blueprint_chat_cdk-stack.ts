@@ -22,10 +22,14 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    const chatHistoryConstruct = new ChatHistoryConstruct(this, "ChatHistoryConstruct", {
-      s3BucketName: "blueprint-chat-history",
-      chatHistoryTableName: "blueprint-chat-index",
-    });
+    const chatHistoryConstruct = new ChatHistoryConstruct(
+      this,
+      "ChatHistoryConstruct",
+      {
+        s3BucketName: "blueprint-chat-history",
+        chatHistoryTableName: "blueprint-chat-index",
+      },
+    );
 
     const lambdaLlmProxy = new LambdaLlmProxyConstruct(this, "LambdaLlmProxy", {
       monthlyLimit: 6.6,
