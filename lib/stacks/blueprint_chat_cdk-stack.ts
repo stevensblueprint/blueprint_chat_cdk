@@ -1,9 +1,11 @@
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as cdk from "aws-cdk-lib";
+import * as apigw from "aws-cdk-lib/aws-apigateway";
 import { Construct } from "constructs";
 import LambdaLlmProxyConstruct from "../constructs/lambda_llm_proxy_construct";
 import WebhookLambdaConstruct from "../constructs/webhook_lamda_construct";
 import ChatHistoryConstruct from "../constructs/chat_history_construct";
+import AgentCoreConstruct from "../constructs/agentcore-construct";
 
 export interface BlueprintChatCdkStackProps extends cdk.StackProps {
   NOTION_API_KEY: string;
@@ -20,12 +22,12 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    new ChatHistoryConstruct(this, "ChatHistory", {
+    const chatHistoryConstruct = new ChatHistoryConstruct(this, "ChatHistoryConstruct", {
       s3BucketName: "blueprint-chat-history",
       chatHistoryTableName: "blueprint-chat-index",
     });
 
-    new LambdaLlmProxyConstruct(this, "LambdaLlmProxy", {
+    const lambdaLlmProxy = new LambdaLlmProxyConstruct(this, "LambdaLlmProxy", {
       monthlyLimit: 6.6,
     });
 
@@ -71,6 +73,23 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       environmentVariables: {
         WIKI_API_KEY: props.WIKI_API_KEY,
       },
+    });
+
+    const agentCore = new AgentCoreConstruct(this, "AgentCore", {
+      documentBucket: documentBucket,
+      chatHistoryTable: chatHistoryConstruct.chatHistoryTable,
+    });
+
+    lambdaLlmProxy.v1Resource
+      .addResource("agent")
+      .addMethod(
+        "POST",
+        new apigw.LambdaIntegration(agentCore.agentProxyFn, { proxy: true }),
+      );
+
+    new cdk.CfnOutput(this, "AgentApiUrl", {
+      value: `${lambdaLlmProxy.api.url}v1/agent`,
+      exportName: "AgentApiUrl",
     });
   }
 }

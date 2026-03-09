@@ -13,8 +13,7 @@
     "format:write": "prettier --write ."
   },
   "devDependencies": {
-    "@sitblueprint/pipeline-construct": "^0.1.1",
-    "@sitblueprint/website-construct": "^0.1.2",
+    "@sitblueprint/website-construct": "0.1.9",
     "@types/jest": "^29.5.14",
     "@types/node": "22.7.9",
     "aws-cdk": "2.1024.0",
@@ -25,8 +24,13 @@
     "typescript": "~5.6.3"
   },
   "dependencies": {
-    "aws-cdk-lib": "^2.208.0",
+    "@aws-cdk/aws-bedrock-agentcore-alpha": "2.241.0-alpha.0",
+    "@aws-sdk/client-dynamodb": "^3.1004.0",
+    "@aws-sdk/client-s3": "^3.1004.0",
+    "@aws-sdk/lib-dynamodb": "^3.1004.0",
+    "aws-cdk-lib": "^2.241.0",
     "constructs": "^10.0.0",
-    "dotenv": "^17.2.3"
+    "dotenv": "^17.2.3",
+    "uuid": "^13.0.0"
   }
 }
