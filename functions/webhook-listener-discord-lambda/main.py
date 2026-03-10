@@ -57,7 +57,10 @@ def _parse_body(event: dict) -> dict:
             body = base64.b64decode(body, validate=True).decode("utf-8")
         if not body.strip():
             return {}
-        return json.loads(body)
+        parsed = json.loads(body)
+        if not isinstance(parsed, dict):
+            raise ValueError("Invalid request payload")
+        return parsed
     except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError("Invalid request payload") from exc
 
@@ -72,6 +75,9 @@ def _redact_headers(headers: dict | None) -> dict:
         "proxy-authorization",
         "x-api-key",
         "x-discord-api-key",
+        "x-drive-api-key",
+        "x-notion-api-key",
+        "x-wiki-api-key",
         "cookie",
         "set-cookie",
     }
@@ -114,7 +120,7 @@ def _normalize_event(payload: dict, raw_event: dict) -> dict:
             "account_id": payload.get("account_id", "unknown"),
         },
         "scope": {
-            "scope_type": payload.get("scope_type", "directory"),
+            "scope_type": payload.get("scope_type", "discord_channel"),
             "scope_id": payload.get("scope_id")
             or payload.get("container_id")
             or payload.get("channel_id")
