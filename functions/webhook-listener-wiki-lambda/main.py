@@ -14,6 +14,16 @@ SQS_CLIENT = boto3.client("sqs")
 
 
 def _response(status_code: int, body: dict):
+    """
+    Builds an HTTP-style JSON response dictionary for API Gateway-compatible lambdas.
+    
+    Parameters:
+        status_code (int): HTTP status code to return.
+        body (dict): Data to serialize as the JSON response body.
+    
+    Returns:
+        dict: A mapping with keys `statusCode`, `headers` (Content-Type set to application/json), and `body` (a JSON-encoded string).
+    """
     return {
         "statusCode": status_code,
         "headers": {"Content-Type": "application/json"},
@@ -22,6 +32,16 @@ def _response(status_code: int, body: dict):
 
 
 def _get_header(event: dict, header_name: str) -> str | None:
+    """
+    Retrieve a header value from an event's headers using case-insensitive name matching.
+    
+    Parameters:
+        event (dict): The event object containing a "headers" mapping.
+        header_name (str): The header name to look up (case-insensitive).
+    
+    Returns:
+        str | None: The header value if found, `None` otherwise.
+    """
     headers = event.get("headers") or {}
     target = header_name.lower()
     for key, value in headers.items():
@@ -31,6 +51,16 @@ def _get_header(event: dict, header_name: str) -> str | None:
 
 
 def _is_authorized(event: dict, expected_key: str) -> bool:
+    """
+    Determine whether the incoming event supplies the expected API key.
+    
+    Parameters:
+        event (dict): HTTP-style event containing request headers.
+        expected_key (str): The API key value to validate against.
+    
+    Returns:
+        `true` if the event contains a matching API key, `false` otherwise.
+    """
     supplied_key = (
         _get_header(event, "x-wiki-api-key")
         or _get_header(event, "x-api-key")
@@ -44,6 +74,18 @@ def _is_authorized(event: dict, expected_key: str) -> bool:
 
 
 def _parse_body(event: dict) -> dict:
+    """
+    Parse and validate the HTTP-like event body and return it as a dict.
+    
+    Parameters:
+        event (dict): The incoming event object; may contain "body" (str or dict) and "isBase64Encoded" (truthy) keys.
+    
+    Returns:
+        dict: The parsed JSON object. Returns an empty dict when there is no body or the body is empty.
+    
+    Raises:
+        ValueError: If the body has an unsupported type or cannot be decoded/parsed as a JSON object.
+    """
     body = event.get("body")
     if body is None:
         return {}
@@ -66,6 +108,17 @@ def _parse_body(event: dict) -> dict:
 
 
 def _redact_headers(headers: dict | None) -> dict:
+    """
+    Redact sensitive header values and return a copy suitable for logging or forwarding.
+    
+    Parameters:
+        headers (dict | None): Mapping of HTTP header names to values; may be None.
+    
+    Returns:
+        dict: A new headers mapping where values for common sensitive header names (for example
+        Authorization, API keys, Cookie, Set-Cookie and similar) are replaced with "[REDACTED]".
+        Non-string header names are omitted and original header name casing is preserved for keys kept.
+    """
     if not isinstance(headers, dict):
         return {}
 
@@ -94,6 +147,16 @@ def _redact_headers(headers: dict | None) -> dict:
 
 
 def _normalize_event(payload: dict, raw_event: dict) -> dict:
+    """
+    Produce a normalized event dictionary containing standardized metadata and source details.
+    
+    Parameters:
+        payload (dict): Parsed webhook payload with fields from the source system. Missing identifiers and fields are populated with sensible defaults (e.g., "unknown") where applicable.
+        raw_event (dict): Original raw event/request object; headers from this object are included under `source_details.raw_event.headers` after redaction.
+    
+    Returns:
+        dict: A standardized event structure including keys: `schema_version`, `event_id`, `emitted_at`, `tenant`, `source`, `scope`, `change`, `actor`, `delivery_key`, and `source_details`. Boolean change flags are coerced to `bool`, timestamps and IDs are generated when absent, and raw headers are redacted.
+    """
     now = datetime.now(timezone.utc).isoformat()
     event_id = str(uuid.uuid4())
     source_change_id = payload.get("change_id") or payload.get("id") or event_id
@@ -154,10 +217,25 @@ def _normalize_event(payload: dict, raw_event: dict) -> dict:
 
 
 def _enqueue(message: dict):
+    """
+    Enqueue a JSON-serializable message to the configured SQS queue.
+    
+    Parameters:
+        message (dict): The payload to send; will be JSON-serialized and delivered to the service queue configured by the environment.
+    """
     SQS_CLIENT.send_message(QueueUrl=QUEUE_URL, MessageBody=json.dumps(message))
 
 
 def handler(event, _ctx):
+    """
+    Handle an incoming webhook: authorize the request, parse and normalize the payload, enqueue the normalized event, and return an HTTP-style response.
+    
+    Parameters:
+        event (dict): The Lambda event object (headers and body expected); used for authorization, payload extraction, and raw event metadata.
+    
+    Returns:
+        dict: An HTTP-like response with keys `statusCode`, `headers`, and `body` (JSON-serializable). On success the body contains `status: "accepted"` and `event_id`; on failure the body contains an `error` message and an appropriate status code.
+    """
     if not _is_authorized(event or {}, WIKI_API_KEY):
         return _response(401, {"error": "Unauthorized"})
 
