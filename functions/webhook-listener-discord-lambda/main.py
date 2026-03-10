@@ -62,6 +62,31 @@ def _parse_body(event: dict) -> dict:
         raise ValueError("Invalid request payload") from exc
 
 
+def _redact_headers(headers: dict | None) -> dict:
+    if not isinstance(headers, dict):
+        return {}
+
+    # Redact auth/session secrets before forwarding raw event metadata.
+    sensitive_header_names = {
+        "authorization",
+        "proxy-authorization",
+        "x-api-key",
+        "x-discord-api-key",
+        "cookie",
+        "set-cookie",
+    }
+
+    redacted_headers = {}
+    for key, value in headers.items():
+        if not isinstance(key, str):
+            continue
+        if key.lower() in sensitive_header_names:
+            redacted_headers[key] = "[REDACTED]"
+        else:
+            redacted_headers[key] = value
+    return redacted_headers
+
+
 def _normalize_event(payload: dict, raw_event: dict) -> dict:
     now = datetime.now(timezone.utc).isoformat()
     event_id = str(uuid.uuid4())
@@ -115,7 +140,7 @@ def _normalize_event(payload: dict, raw_event: dict) -> dict:
         "delivery_key": f"{source_type}:{connection_id}:{source_change_id}:{object_id}",
         "source_details": {
             "raw_event": {
-                "headers": raw_event.get("headers") or {},
+                "headers": _redact_headers(raw_event.get("headers")),
                 "payload": payload,
             }
         },
