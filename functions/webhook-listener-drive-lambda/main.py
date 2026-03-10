@@ -1,4 +1,5 @@
 import base64
+import binascii
 import json
 import uuid
 from datetime import datetime, timezone
@@ -22,10 +23,11 @@ def _response(status_code: int, body: dict):
 
 def _get_header(event: dict, header_name: str) -> str | None:
     headers = event.get("headers") or {}
-    value = headers.get(header_name)
-    if value is not None:
-        return value
-    return headers.get(header_name.lower())
+    target = header_name.lower()
+    for key, value in headers.items():
+        if isinstance(key, str) and key.lower() == target:
+            return value
+    return None
 
 
 def _is_authorized(event: dict, expected_key: str) -> bool:
@@ -49,11 +51,15 @@ def _parse_body(event: dict) -> dict:
         return body
     if not isinstance(body, str):
         raise ValueError("Invalid body type")
-    if event.get("isBase64Encoded"):
-        body = base64.b64decode(body).decode("utf-8")
-    if not body.strip():
-        return {}
-    return json.loads(body)
+
+    try:
+        if event.get("isBase64Encoded"):
+            body = base64.b64decode(body, validate=True).decode("utf-8")
+        if not body.strip():
+            return {}
+        return json.loads(body)
+    except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Invalid request payload") from exc
 
 
 def _normalize_event(payload: dict, raw_event: dict) -> dict:
