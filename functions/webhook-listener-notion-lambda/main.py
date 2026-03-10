@@ -151,7 +151,7 @@ def _enqueue(message: dict):
     SQS_CLIENT.send_message(QueueUrl=QUEUE_URL, MessageBody=json.dumps(message))
 
 
-def handler(event, ctx):
+def handler(event, _ctx):
     if not _is_authorized(event or {}, NOTION_KEY):
         return _response(401, {"error": "Unauthorized"})
 
