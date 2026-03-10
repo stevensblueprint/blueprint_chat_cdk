@@ -8,7 +8,7 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from utils import get_safe_env
 
-NOTION_KEY = get_safe_env("NOTION_API_KEY")
+NOTION_API_KEY = get_safe_env("NOTION_API_KEY")
 QUEUE_URL = get_safe_env("WEBHOOK_EVENTS_QUEUE_URL")
 SQS_CLIENT = boto3.client("sqs")
 
@@ -158,7 +158,7 @@ def _enqueue(message: dict):
 
 
 def handler(event, _ctx):
-    if not _is_authorized(event or {}, NOTION_KEY):
+    if not _is_authorized(event or {}, NOTION_API_KEY):
         return _response(401, {"error": "Unauthorized"})
 
     try:
