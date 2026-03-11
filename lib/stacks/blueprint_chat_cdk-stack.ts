@@ -9,6 +9,7 @@ import ChatHistoryConstruct from "../constructs/chat-history-construct";
 import AgentCoreConstruct from "../constructs/agentcore-construct";
 
 export interface BlueprintChatCdkStackProps extends cdk.StackProps {
+  environment: string;
   NOTION_API_KEY: string;
   DISCORD_API_KEY: string;
   DRIVE_API_KEY: string;
@@ -18,8 +19,10 @@ export class BlueprintChatCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BlueprintChatCdkStackProps) {
     super(scope, id, props);
 
+    const envSuffix = props.environment === "prod" ? "" : `-${props.environment}`;
+
     const documentBucket = new s3.Bucket(this, "DocumentBucket", {
-      bucketName: `blueprint-chat-documents-${cdk.Stack.of(this).account.toLowerCase()}`,
+      bucketName: `blueprint-chat-documents-${cdk.Stack.of(this).account.toLowerCase()}${envSuffix}`,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
@@ -70,8 +73,9 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       this,
       "ChatHistoryConstruct",
       {
-        s3BucketName: "blueprint-chat-history",
-        chatHistoryTableName: "ChatHistory",
+        environment: props.environment,
+        s3BucketName: `blueprint-chat-history${envSuffix}`,
+        chatHistoryTableName: `ChatHistory${envSuffix}`,
       },
     );
 
@@ -101,7 +105,12 @@ export class BlueprintChatCdkStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "AgentApiUrl", {
       value: `${lambdaLlmProxy.api.url}v1/agent`,
-      exportName: "AgentApiUrl",
+      exportName: `AgentApiUrl${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, "AgentStreamingUrl", {
+      value: agentCore.streamingUrl.url,
+      exportName: `AgentStreamingUrl${envSuffix}`,
     });
   }
 }
