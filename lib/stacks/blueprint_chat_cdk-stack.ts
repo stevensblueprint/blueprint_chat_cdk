@@ -1,11 +1,15 @@
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as cdk from "aws-cdk-lib";
+import * as apigw from "aws-cdk-lib/aws-apigateway";
 import { Construct } from "constructs";
 import LambdaLlmProxyConstruct from "../constructs/lambda_llm_proxy_construct";
 import WebhookLambdaConstruct from "../constructs/webhook_lamda_construct";
 import { IngestionQueueConstruct } from "../constructs/ingestion_queue_construct";
+import ChatHistoryConstruct from "../constructs/chat-history-construct";
+import AgentCoreConstruct from "../constructs/agentcore-construct";
 
 export interface BlueprintChatCdkStackProps extends cdk.StackProps {
+  environment: string;
   NOTION_API_KEY: string;
   DISCORD_API_KEY: string;
   DRIVE_API_KEY: string;
@@ -15,12 +19,14 @@ export class BlueprintChatCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BlueprintChatCdkStackProps) {
     super(scope, id, props);
 
+    const envSuffix = props.environment === "" ? "" : `-${props.environment}`;
+
     const documentBucket = new s3.Bucket(this, "DocumentBucket", {
-      bucketName: `${cdk.Stack.of(this).account.toLowerCase()}-blueprint-chat-documents`,
+      bucketName: `blueprint-chat-documents-${cdk.Stack.of(this).account.toLowerCase()}${envSuffix}`,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    new LambdaLlmProxyConstruct(this, "LambdaLlmProxy", {
+    const lambdaLlmProxy = new LambdaLlmProxyConstruct(this, "LambdaLlmProxy", {
       monthlyLimit: 6.6,
     });
 
@@ -50,7 +56,6 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       ingestionQueue: ingestion.queue,
     });
 
-    // Google Drive
     new WebhookLambdaConstruct(this, "DriveWebhookLambda", {
       codePath: "functions/webhook-listener-drive-lambda",
       description:
@@ -62,6 +67,16 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       ingestionQueue: ingestion.queue,
     });
 
+    const chatHistoryConstruct = new ChatHistoryConstruct(
+      this,
+      "ChatHistoryConstruct",
+      {
+        environment: props.environment,
+        s3BucketName: `blueprint-chat-history${envSuffix}`,
+        chatHistoryTableName: `ChatHistory${envSuffix}`,
+      },
+    );
+
     // Wiki
     new WebhookLambdaConstruct(this, "WikiWebhookLambda", {
       codePath: "functions/webhook-listener-wiki-lambda",
@@ -72,6 +87,28 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         WIKI_API_KEY: props.WIKI_API_KEY,
       },
       ingestionQueue: ingestion.queue,
+    });
+
+    const agentCore = new AgentCoreConstruct(this, "AgentCore", {
+      documentBucket: documentBucket,
+      chatHistoryTable: chatHistoryConstruct.chatHistoryTable,
+    });
+
+    lambdaLlmProxy.v1Resource
+      .addResource("agent")
+      .addMethod(
+        "POST",
+        new apigw.LambdaIntegration(agentCore.agentProxyFn, { proxy: true }),
+      );
+
+    new cdk.CfnOutput(this, "AgentApiUrl", {
+      value: `${lambdaLlmProxy.api.url}v1/agent`,
+      exportName: `AgentApiUrl${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, "AgentStreamingUrl", {
+      value: agentCore.streamingUrl.url,
+      exportName: `AgentStreamingUrl${envSuffix}`,
     });
   }
 }
