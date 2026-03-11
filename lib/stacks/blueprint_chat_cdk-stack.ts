@@ -94,5 +94,10 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       value: `${lambdaLlmProxy.api.url}v1/agent`,
       exportName: "AgentApiUrl",
     });
+
+    new cdk.CfnOutput(this, "AgentStreamingUrl", {
+      value: agentCore.streamingUrl.url,
+      exportName: "AgentStreamingUrl",
+    });
   }
 }
