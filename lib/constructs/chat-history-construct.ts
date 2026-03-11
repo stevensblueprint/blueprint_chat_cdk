@@ -16,7 +16,7 @@ export default class ChatHistoryConstruct extends Construct {
   constructor(scope: Construct, id: string, props: ChatHistoryConstructProps) {
     super(scope, id);
 
-    const envSuffix = props.environment === "prod" ? "" : `-${props.environment}`;
+    const envSuffix = props.environment === "" ? "" : `-${props.environment}`;
 
     this.s3Bucket = s3.Bucket.fromBucketName(
       this,

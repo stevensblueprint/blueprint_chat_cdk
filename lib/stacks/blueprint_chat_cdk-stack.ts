@@ -18,7 +18,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BlueprintChatCdkStackProps) {
     super(scope, id, props);
 
-    const envSuffix = props.environment === "prod" ? "" : `-${props.environment}`;
+    const envSuffix = props.environment === "" ? "" : `-${props.environment}`;
 
     const documentBucket = new s3.Bucket(this, "DocumentBucket", {
       bucketName: `blueprint-chat-documents-${cdk.Stack.of(this).account.toLowerCase()}${envSuffix}`,
