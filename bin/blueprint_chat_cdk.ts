@@ -5,8 +5,8 @@ import { BlueprintChatCdkStack } from "../lib/stacks/blueprint_chat_cdk-stack";
 
 dotenv.config();
 
-const environment = process.env.ENVIRONMENT ?? "dev";
-const envSuffix = environment === "prod" ? "" : `-${environment}`;
+const environment = process.env.ENVIRONMENT || "";
+const envSuffix = environment === "" ? "" : `-${environment}`;
 
 const app = new cdk.App();
 const env: cdk.Environment = {
