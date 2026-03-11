@@ -16,6 +16,8 @@ export interface LambdaLlmProxyConstructProps {
 export default class LambdaLlmProxyConstruct extends Construct {
   public readonly monthlyUsageTable: dynamodb.ITable;
   public readonly transactionsTable: dynamodb.ITable;
+  public readonly api: apigw.RestApi;
+  public readonly v1Resource: apigw.IResource;
 
   constructor(
     scope: Construct,
@@ -92,7 +94,7 @@ export default class LambdaLlmProxyConstruct extends Construct {
       }),
     );
 
-    const api = new apigw.RestApi(this, "BedUsageApi", {
+    this.api = new apigw.RestApi(this, "BedUsageApi", {
       restApiName: "bedrock-usage-api",
       description: "API Gateway for monthly usage statistics",
       deployOptions: {
@@ -101,7 +103,7 @@ export default class LambdaLlmProxyConstruct extends Construct {
       },
       defaultCorsPreflightOptions: {
         allowOrigins: apigw.Cors.ALL_ORIGINS,
-        allowMethods: ["GET", "OPTIONS"],
+        allowMethods: ["GET", "POST", "OPTIONS"],
         allowHeaders: [
           "Content-Type",
           "Authorization",
@@ -114,27 +116,28 @@ export default class LambdaLlmProxyConstruct extends Construct {
       minCompressionSize: cdk.Size.bytes(1024),
     });
 
-    api.addGatewayResponse("Default4xx", {
+    this.api.addGatewayResponse("Default4xx", {
       type: apigw.ResponseType.DEFAULT_4XX,
       responseHeaders: {
         "Access-Control-Allow-Origin": "'*'",
         "Access-Control-Allow-Headers":
           "'Content-Type,Authorization,x-api-key,Accept,Origin,X-Requested-With'",
-        "Access-Control-Allow-Methods": "'GET,OPTIONS'",
+        "Access-Control-Allow-Methods": "'GET,POST,OPTIONS'",
       },
     });
 
-    api.addGatewayResponse("Default5xx", {
+    this.api.addGatewayResponse("Default5xx", {
       type: apigw.ResponseType.DEFAULT_5XX,
       responseHeaders: {
         "Access-Control-Allow-Origin": "'*'",
         "Access-Control-Allow-Headers":
           "'Content-Type,Authorization,x-api-key,Accept,Origin,X-Requested-With'",
-        "Access-Control-Allow-Methods": "'GET,OPTIONS'",
+        "Access-Control-Allow-Methods": "'GET,POST,OPTIONS'",
       },
     });
 
-    const v1 = api.root.addResource("v1");
+    this.v1Resource = this.api.root.addResource("v1");
+    const v1 = this.v1Resource;
 
     const usageLambdaIntegration = new apigw.LambdaIntegration(
       inferenceUsageFn,
@@ -180,7 +183,7 @@ export default class LambdaLlmProxyConstruct extends Construct {
     });
 
     new cdk.CfnOutput(this, "UsageApiInvokeUrl", {
-      value: `${api.url}v1/usage`,
+      value: `${this.api.url}v1/usage`,
       description: "GET here to retrieve current monthly usage for a user.",
       exportName: "BedrockUsageInvokeUrl",
     });
