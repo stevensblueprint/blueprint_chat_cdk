@@ -4,6 +4,7 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import * as cdk from "aws-cdk-lib";
 
 export interface ChatHistoryConstructProps {
+  environment: string;
   s3BucketName: string;
   chatHistoryTableName: string;
 }
@@ -14,6 +15,8 @@ export default class ChatHistoryConstruct extends Construct {
 
   constructor(scope: Construct, id: string, props: ChatHistoryConstructProps) {
     super(scope, id);
+
+    const envSuffix = props.environment === "prod" ? "" : `-${props.environment}`;
 
     this.s3Bucket = s3.Bucket.fromBucketName(
       this,
@@ -35,11 +38,11 @@ export default class ChatHistoryConstruct extends Construct {
 
     new cdk.CfnOutput(this, "ChatHistoryTableName", {
       value: this.chatHistoryTable.tableName,
-      exportName: "ChatHistoryTableName",
+      exportName: `ChatHistoryTableName-${props.environment}`,
     });
     new cdk.CfnOutput(this, "ChatHistoryBucketName", {
       value: this.s3Bucket.bucketName,
-      exportName: "ChatHistoryBucketName",
+      exportName: `ChatHistoryBucketName-${props.environment}`,
     });
   }
 }
