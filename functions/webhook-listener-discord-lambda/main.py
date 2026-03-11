@@ -2,6 +2,7 @@ import base64
 import binascii
 import json
 import uuid
+from collections.abc import Mapping
 from datetime import datetime, timezone
 
 import boto3
@@ -16,11 +17,11 @@ SQS_CLIENT = boto3.client("sqs")
 def _response(status_code: int, body: dict):
     """
     Builds an HTTP-style response dictionary with a JSON-encoded body.
-    
+
     Parameters:
         status_code (int): HTTP status code to set on the response.
         body (dict): Payload to JSON-encode into the response body.
-    
+
     Returns:
         dict: A mapping containing 'statusCode' (int), 'headers' (includes Content-Type: application/json), and 'body' (JSON string of the provided payload).
     """
@@ -34,18 +35,20 @@ def _response(status_code: int, body: dict):
 def _get_header(event: dict, header_name: str) -> str | None:
     """
     Retrieve a header value from an event's headers using a case-insensitive header name lookup.
-    
+
     Parameters:
         event (dict): Incoming event object expected to contain a "headers" mapping.
         header_name (str): Name of the header to retrieve.
-    
+
     Returns:
         str | None: The header value if present, `None` otherwise.
     """
-    headers = event.get("headers") or {}
+    headers = event.get("headers")
+    if not isinstance(headers, Mapping):
+        return None
     target = header_name.lower()
     for key, value in headers.items():
-        if isinstance(key, str) and key.lower() == target:
+        if isinstance(key, str) and key.lower() == target and isinstance(value, str):
             return value
     return None
 
@@ -53,13 +56,13 @@ def _get_header(event: dict, header_name: str) -> str | None:
 def _is_authorized(event: dict, expected_key: str) -> bool:
     """
     Validate request authorization by comparing an API key found in common headers to the expected key.
-    
+
     Searches the headers "x-discord-api-key", "x-api-key", and "Authorization" (in that order) for a supplied key. If an Authorization header contains a Bearer token, a leading "Bearer " prefix is removed case-insensitively before comparison. Comparison is performed by exact equality against expected_key.
-    
+
     Parameters:
         event (dict): Incoming request event containing headers.
         expected_key (str): The API key expected for authorized requests.
-    
+
     Returns:
         bool: `true` if the supplied key matches `expected_key`, `false` otherwise.
     """
@@ -78,15 +81,15 @@ def _is_authorized(event: dict, expected_key: str) -> bool:
 def _parse_body(event: dict) -> dict:
     """
     Parse and validate the Lambda HTTP event body and return its JSON payload.
-    
+
     Parameters:
         event (dict): Incoming Lambda event expected to include a "body" key and optional "isBase64Encoded".
             - If "body" is a dict, it is returned unchanged.
             - If "body" is a base64-encoded string and "isBase64Encoded" is truthy, it will be decoded before parsing.
-    
+
     Returns:
         dict: The parsed JSON object from the request body, or an empty dict when the body is None or empty/whitespace.
-    
+
     Raises:
         ValueError: If the body is neither a dict nor a string, or if the body cannot be decoded or parsed as a JSON object.
     """
@@ -114,10 +117,10 @@ def _parse_body(event: dict) -> dict:
 def _redact_headers(headers: dict | None) -> dict:
     """
     Produce a copy of the provided HTTP headers with sensitive values replaced by "[REDACTED]".
-    
+
     Parameters:
         headers (dict | None): Mapping of header names to values. If `headers` is not a dict, an empty dict is returned. Keys that are not strings are ignored.
-    
+
     Returns:
         dict: A headers dictionary where values for sensitive header names (e.g., authorization, proxy-authorization, x-api-key, x-discord-api-key, cookie, set-cookie and similar) are replaced with "[REDACTED]"; non-sensitive headers are preserved unchanged.
     """
@@ -151,7 +154,7 @@ def _redact_headers(headers: dict | None) -> dict:
 def _normalize_event(payload: dict, raw_event: dict) -> dict:
     """
     Constructs a normalized event dictionary from the incoming payload and raw event.
-    
+
     Parameters:
         payload (dict): The parsed request payload; optional keys such as
             tenant_id, workspace_id, connection_id, account_id, scope_type,
@@ -163,7 +166,7 @@ def _normalize_event(payload: dict, raw_event: dict) -> dict:
         raw_event (dict): The original event dictionary (typically the raw request),
             used to include redacted headers and the original payload under
             source_details.raw_event.
-    
+
     Returns:
         dict: A normalized event structure containing keys: schema_version, event_id,
         emitted_at, tenant, source, scope, change, actor, delivery_key, and
@@ -231,7 +234,7 @@ def _normalize_event(payload: dict, raw_event: dict) -> dict:
 def _enqueue(message: dict):
     """
     Enqueues the provided dictionary as a JSON-formatted message to the configured SQS queue.
-    
+
     Parameters:
         message (dict): The payload to send; it will be serialized to JSON and placed in the SQS message body.
     """
@@ -241,11 +244,11 @@ def _enqueue(message: dict):
 def handler(event, _ctx):
     """
     Handle an incoming webhook: authorize the request, parse and normalize the payload, enqueue the normalized event to SQS, and return an HTTP-like response.
-    
+
     Parameters:
         event (dict): Lambda event dictionary containing headers and body.
         _ctx: Lambda context object (unused).
-    
+
     Returns:
         dict: HTTP-like response with keys `statusCode`, `headers`, and `body` (JSON string). Possible status codes:
             - 202: accepted; `body` contains {"status": "accepted", "event_id": <id>}.
@@ -258,7 +261,7 @@ def handler(event, _ctx):
 
     try:
         payload = _parse_body(event or {})
-    except (ValueError, json.JSONDecodeError):
+    except ValueError:
         return _response(400, {"error": "Invalid request payload"})
 
     normalized_event = _normalize_event(payload, event or {})

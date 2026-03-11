@@ -2,6 +2,7 @@ import base64
 import binascii
 import json
 import uuid
+from collections.abc import Mapping
 from datetime import datetime, timezone
 
 import boto3
@@ -42,10 +43,12 @@ def _get_header(event: dict, header_name: str) -> str | None:
     Returns:
         str | None: The header value if found, `None` if the header is not present.
     """
-    headers = event.get("headers") or {}
+    headers = event.get("headers")
+    if not isinstance(headers, Mapping):
+        return None
     target = header_name.lower()
     for key, value in headers.items():
-        if isinstance(key, str) and key.lower() == target:
+        if isinstance(key, str) and key.lower() == target and isinstance(value, str):
             return value
     return None
 
@@ -258,7 +261,7 @@ def handler(event, _ctx):
 
     try:
         payload = _parse_body(event or {})
-    except (ValueError, json.JSONDecodeError):
+    except ValueError:
         return _response(400, {"error": "Invalid request payload"})
 
     normalized_event = _normalize_event(payload, event or {})
