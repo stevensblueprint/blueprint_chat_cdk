@@ -38,11 +38,11 @@ export default class ChatHistoryConstruct extends Construct {
 
     new cdk.CfnOutput(this, "ChatHistoryTableName", {
       value: this.chatHistoryTable.tableName,
-      exportName: `ChatHistoryTableName-${props.environment}`,
+      exportName: `ChatHistoryTableName${envSuffix}`,
     });
     new cdk.CfnOutput(this, "ChatHistoryBucketName", {
       value: this.s3Bucket.bucketName,
-      exportName: `ChatHistoryBucketName-${props.environment}`,
+      exportName: `ChatHistoryBucketName${envSuffix}`,
     });
   }
 }
