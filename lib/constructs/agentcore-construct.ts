@@ -2,6 +2,7 @@ import * as cdk from "aws-cdk-lib";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as path from "path";
@@ -22,7 +23,8 @@ export default class AgentCoreConstruct extends Construct {
   constructor(scope: Construct, id: string, props: AgentCoreConstructProps) {
     super(scope, id);
 
-    const modelId = props.modelId ?? "us.anthropic.claude-3-5-haiku-20241022-v1:0";
+    const modelId =
+      props.modelId ?? "us.anthropic.claude-3-5-haiku-20241022-v1:0";
     const embeddingModelId = "amazon.titan-embed-text-v2:0";
     const region = cdk.Stack.of(this).region;
     const account = cdk.Stack.of(this).account;
@@ -79,12 +81,18 @@ export default class AgentCoreConstruct extends Construct {
     indexerFn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["bedrock:InvokeModel"],
-        resources: [`arn:aws:bedrock:${region}::foundation-model/${embeddingModelId}`],
+        resources: [
+          `arn:aws:bedrock:${region}::foundation-model/${embeddingModelId}`,
+        ],
       }),
     );
     indexerFn.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: ["s3vectors:PutVectors", "s3vectors:DeleteVectors", "s3vectors:ListVectors"],
+        actions: [
+          "s3vectors:PutVectors",
+          "s3vectors:DeleteVectors",
+          "s3vectors:ListVectors",
+        ],
         resources: [vectorsArn],
       }),
     );
@@ -120,7 +128,10 @@ export default class AgentCoreConstruct extends Construct {
 
     runtime.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+        actions: [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream",
+        ],
         resources: [
           `arn:aws:bedrock:${region}:*:inference-profile/${modelId}`,
           `arn:aws:bedrock:*::foundation-model/${baseModelId}`,
@@ -135,30 +146,46 @@ export default class AgentCoreConstruct extends Construct {
       }),
     );
 
-    this.agentProxyFn = new lambda.Function(this, "AgentProxyFn", {
-      runtime: lambda.Runtime.PYTHON_3_12,
-      handler: "main.handler",
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, "../../functions/agentcore-proxy-lambda"),
-      ),
+    const agentProxyEntry = path.join(
+      __dirname,
+      "../../functions/agentcore-proxy-lambda/index.ts",
+    );
+
+    const agentProxyEnvironment = {
+      AGENT_RUNTIME_ARN: runtime.agentRuntimeArn,
+      AGENT_RUNTIME_ENDPOINT: endpoint.endpointName,
+      REGION: region,
+    };
+
+    this.agentProxyFn = new NodejsFunction(this, "AgentProxyFn", {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      entry: agentProxyEntry,
+      handler: "handler",
       timeout: cdk.Duration.seconds(60),
-      environment: {
-        AGENT_RUNTIME_ARN: runtime.agentRuntimeArn,
-        AGENT_RUNTIME_ENDPOINT: endpoint.endpointName,
-        REGION: region,
-      },
+      environment: agentProxyEnvironment,
     });
 
     runtime.grantInvoke(this.agentProxyFn);
 
-    this.streamingUrl = this.agentProxyFn.addFunctionUrl({
+    const agentStreamingFn = new NodejsFunction(this, "AgentStreamingFn", {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      entry: agentProxyEntry,
+      handler: "streamingHandler",
+      timeout: cdk.Duration.seconds(60),
+      environment: agentProxyEnvironment,
+    });
+
+    runtime.grantInvoke(agentStreamingFn);
+
+    this.streamingUrl = agentStreamingFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
       invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
       cors: {
         allowedOrigins: ["*"],
         allowedHeaders: ["content-type", "authorization"],
-        allowedMethods: [lambda.HttpMethod.POST, lambda.HttpMethod.OPTIONS],
+        allowedMethods: [lambda.HttpMethod.ALL],
       },
     });
+    cdk.Tags.of(this).add("agentcore", "document-qa-agent");
   }
 }

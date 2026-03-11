@@ -1,0 +1,13 @@
+{
+  "name": "agentcore-proxy-lambda",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-bedrock-agentcore": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.152"
+  }
+}
