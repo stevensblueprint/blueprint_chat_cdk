@@ -4,6 +4,7 @@ import * as apigw from "aws-cdk-lib/aws-apigateway";
 import { Construct } from "constructs";
 import LambdaLlmProxyConstruct from "../constructs/lambda_llm_proxy_construct";
 import WebhookLambdaConstruct from "../constructs/webhook_lamda_construct";
+import { IngestionQueueConstruct } from "../constructs/ingestion_queue_construct";
 import ChatHistoryConstruct from "../constructs/chat-history-construct";
 import AgentCoreConstruct from "../constructs/agentcore-construct";
 
@@ -29,6 +30,8 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       monthlyLimit: 6.6,
     });
 
+    const ingestion = new IngestionQueueConstruct(this, "Ingestion");
+
     // Notion
     new WebhookLambdaConstruct(this, "NotionWebhookLambda", {
       codePath: "functions/webhook-listener-notion-lambda",
@@ -38,6 +41,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       environmentVariables: {
         NOTION_API_KEY: props.NOTION_API_KEY,
       },
+      ingestionQueue: ingestion.queue,
     });
 
     // Discord
@@ -49,6 +53,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       environmentVariables: {
         DISCORD_API_KEY: props.DISCORD_API_KEY,
       },
+      ingestionQueue: ingestion.queue,
     });
 
     new WebhookLambdaConstruct(this, "DriveWebhookLambda", {
@@ -59,6 +64,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       environmentVariables: {
         DRIVE_API_KEY: props.DRIVE_API_KEY,
       },
+      ingestionQueue: ingestion.queue,
     });
 
     const chatHistoryConstruct = new ChatHistoryConstruct(
@@ -80,6 +86,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       environmentVariables: {
         WIKI_API_KEY: props.WIKI_API_KEY,
       },
+      ingestionQueue: ingestion.queue,
     });
 
     const agentCore = new AgentCoreConstruct(this, "AgentCore", {
