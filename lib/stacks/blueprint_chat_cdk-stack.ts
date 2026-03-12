@@ -1,5 +1,6 @@
-import * as s3 from "aws-cdk-lib/aws-s3";
 import * as cdk from "aws-cdk-lib";
+import * as s3 from "aws-cdk-lib/aws-s3";
+import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as apigw from "aws-cdk-lib/aws-apigateway";
 import { Construct } from "constructs";
 import LambdaLlmProxyConstruct from "../constructs/lambda_llm_proxy_construct";
@@ -25,6 +26,10 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
+    const webhookEventsQueue = new sqs.Queue(this, "WebhookEventsQueue", {
+      visibilityTimeout: cdk.Duration.seconds(30),
+    });
+
     const lambdaLlmProxy = new LambdaLlmProxyConstruct(this, "LambdaLlmProxy", {
       monthlyLimit: 6.6,
     });
@@ -38,6 +43,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       environmentVariables: {
         NOTION_API_KEY: props.NOTION_API_KEY,
       },
+      webhookEventsQueue,
     });
 
     // Discord
@@ -49,6 +55,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       environmentVariables: {
         DISCORD_API_KEY: props.DISCORD_API_KEY,
       },
+      webhookEventsQueue,
     });
 
     new WebhookLambdaConstruct(this, "DriveWebhookLambda", {
@@ -59,6 +66,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       environmentVariables: {
         DRIVE_API_KEY: props.DRIVE_API_KEY,
       },
+      webhookEventsQueue,
     });
 
     const chatHistoryConstruct = new ChatHistoryConstruct(
@@ -80,6 +88,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       environmentVariables: {
         WIKI_API_KEY: props.WIKI_API_KEY,
       },
+      webhookEventsQueue,
     });
 
     const agentCore = new AgentCoreConstruct(this, "AgentCore", {
