@@ -91,7 +91,16 @@ exports.streamingHandler = awslambda.streamifyResponse(
 
       if (stream) {
         for await (const chunk of stream) {
-          responseStream.write(chunk);
+          const text = Buffer.isBuffer(chunk)
+            ? chunk.toString("utf-8")
+            : new TextDecoder().decode(chunk);
+          for (const line of text.split("\n")) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith("data: ")) {
+              const json = trimmed.slice(6).trim();
+              if (json) responseStream.write(json + "\n");
+            }
+          }
         }
       }
     } catch (err: any) {
@@ -123,10 +132,28 @@ exports.handler = async (event: any): Promise<any> => {
     }
 
     const raw = Buffer.concat(chunks).toString("utf-8");
+    let text = "";
+    let conversationId: string | undefined;
+    let sources: string[] = [];
+
+    for (const line of raw.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data: ")) continue;
+      try {
+        const parsed = JSON.parse(trimmed.slice(6).trim());
+        if (parsed.type === "token") text += parsed.text ?? "";
+        else if (parsed.type === "done") {
+          conversationId = parsed.conversationId;
+          sources = parsed.sources ?? [];
+        }
+      } catch {
+      }
+    }
+
     return {
       statusCode: 200,
       headers: CORS_HEADERS,
-      body: raw,
+      body: JSON.stringify({ text, conversationId, sources }),
     };
   } catch (err: any) {
     if (err.message === "prompt is required") {
