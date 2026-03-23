@@ -4,10 +4,11 @@ import * as apigw from "aws-cdk-lib/aws-apigateway";
 import { Construct } from "constructs";
 import LambdaLlmProxyConstruct from "../constructs/lambda_llm_proxy_construct";
 import WebhookLambdaConstruct from "../constructs/webhook_lamda_construct";
-import ChatHistoryConstruct from "../constructs/chat_history_construct";
+import ChatHistoryConstruct from "../constructs/chat-history-construct";
 import AgentCoreConstruct from "../constructs/agentcore-construct";
 
 export interface BlueprintChatCdkStackProps extends cdk.StackProps {
+  environment: string;
   NOTION_API_KEY: string;
   DISCORD_API_KEY: string;
   DRIVE_API_KEY: string;
@@ -17,8 +18,10 @@ export class BlueprintChatCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BlueprintChatCdkStackProps) {
     super(scope, id, props);
 
+    const envSuffix = props.environment === "" ? "" : `-${props.environment}`;
+
     const documentBucket = new s3.Bucket(this, "DocumentBucket", {
-      bucketName: `${cdk.Stack.of(this).account.toLowerCase()}-blueprint-chat-documents`,
+      bucketName: `blueprint-chat-documents-${cdk.Stack.of(this).account.toLowerCase()}${envSuffix}`,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
@@ -26,6 +29,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       this,
       "ChatHistoryConstruct",
       {
+        environment: props.environment,
         s3BucketName: "blueprint-chat-history",
         chatHistoryTableName: "blueprint-chat-index",
       },
@@ -57,7 +61,6 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       },
     });
 
-    // Google Drive
     new WebhookLambdaConstruct(this, "DriveWebhookLambda", {
       codePath: "functions/webhook-listener-drive-lambda",
       description:
@@ -93,7 +96,12 @@ export class BlueprintChatCdkStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "AgentApiUrl", {
       value: `${lambdaLlmProxy.api.url}v1/agent`,
-      exportName: "AgentApiUrl",
+      exportName: `AgentApiUrl${envSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, "AgentStreamingUrl", {
+      value: agentCore.streamingUrl.url,
+      exportName: `AgentStreamingUrl${envSuffix}`,
     });
   }
 }

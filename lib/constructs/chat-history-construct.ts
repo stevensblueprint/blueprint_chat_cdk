@@ -6,6 +6,7 @@ import * as cdk from "aws-cdk-lib";
 import * as path from "path";
 
 export interface ChatHistoryConstructProps {
+  environment: string;
   s3BucketName: string;
   chatHistoryTableName: string;
 }
@@ -18,9 +19,11 @@ export default class ChatHistoryConstruct extends Construct {
   constructor(scope: Construct, id: string, props: ChatHistoryConstructProps) {
     super(scope, id);
 
+    const envSuffix = props.environment === "" ? "" : `-${props.environment}`;
+
     // S3 Bucket Data Model
     this.s3Bucket = new s3.Bucket(this, "ChatHistoryBucket", {
-      bucketName: `${cdk.Stack.of(this).account.toLowerCase()}-${props.s3BucketName}`,
+      bucketName: `${cdk.Stack.of(this).account.toLowerCase()}-${props.s3BucketName}${envSuffix}`,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -29,7 +32,7 @@ export default class ChatHistoryConstruct extends Construct {
 
     // DynamoDB Data Model
     this.chatHistoryTable = new dynamodb.TableV2(this, "ChatHistoryTable", {
-      tableName: props.chatHistoryTableName,
+      tableName: `${cdk.Stack.of(this).account.toLowerCase()}-${props.chatHistoryTableName}${envSuffix}`,
       partitionKey: {
         name: "userId",
         type: dynamodb.AttributeType.STRING,
@@ -63,12 +66,12 @@ export default class ChatHistoryConstruct extends Construct {
 
     new cdk.CfnOutput(this, "ChatHistoryTableName", {
       value: this.chatHistoryTable.tableName,
-      exportName: "ChatHistoryTableName",
+      exportName: `ChatHistoryTableName${envSuffix}`,
     });
 
     new cdk.CfnOutput(this, "ChatHistoryBucketName", {
       value: this.s3Bucket.bucketName,
-      exportName: "ChatHistoryBucketName",
+      exportName: `ChatHistoryBucketName${envSuffix}`,
     });
   }
 }
