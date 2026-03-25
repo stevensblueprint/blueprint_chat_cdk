@@ -27,11 +27,13 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     });
 
     const webhookEventsQueue = new sqs.Queue(this, "WebhookEventsQueue", {
+      queueName: `blueprint-chat-webhook-events${envSuffix}`,
       visibilityTimeout: cdk.Duration.seconds(30),
     });
 
     const lambdaLlmProxy = new LambdaLlmProxyConstruct(this, "LambdaLlmProxy", {
       monthlyLimit: 6.6,
+      environment: props.environment,
     });
 
     // Notion
@@ -94,6 +96,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     const agentCore = new AgentCoreConstruct(this, "AgentCore", {
       documentBucket: documentBucket,
       chatHistoryTable: chatHistoryConstruct.chatHistoryTable,
+      environment: props.environment,
     });
 
     lambdaLlmProxy.v1Resource

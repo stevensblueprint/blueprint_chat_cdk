@@ -11,6 +11,8 @@ export interface LambdaLlmProxyConstructProps {
    * The monthly limit for usage in USD.
    */
   monthlyLimit?: number;
+
+  environment?: string;
 }
 
 export default class LambdaLlmProxyConstruct extends Construct {
@@ -26,16 +28,20 @@ export default class LambdaLlmProxyConstruct extends Construct {
   ) {
     super(scope, id);
 
+    const envSuffix = props.environment ? `-${props.environment}` : "";
+    const monthlyUsageTableName = `Bedrock-Monthly-Usage${envSuffix}`;
+    const transactionsTableName = `Bedrock-Transactions${envSuffix}`;
+
     this.monthlyUsageTable = dynamodb.Table.fromTableName(
       this,
       "MonthlyUsageTable",
-      "Bedrock-Monthly-Usage",
+      monthlyUsageTableName,
     );
 
     this.transactionsTable = dynamodb.Table.fromTableName(
       this,
       "TransactionsTable",
-      "Bedrock-Transactions",
+      transactionsTableName,
     );
 
     const inferenceUsageFn = new lambda.Function(this, "InferenceUsageFn", {
@@ -80,8 +86,8 @@ export default class LambdaLlmProxyConstruct extends Construct {
         ],
         resources: [
           "arn:aws:bedrock:*:*:foundation-model/anthropic.*",
-          "arn:aws:dynamodb:*:*:table/Bedrock-Monthly-Usage",
-          "arn:aws:dynamodb:*:*:table/Bedrock-Transactions",
+          this.monthlyUsageTable.tableArn,
+          this.transactionsTable.tableArn,
         ],
       }),
     );
@@ -90,15 +96,15 @@ export default class LambdaLlmProxyConstruct extends Construct {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["dynamodb:GetItem", "dynamodb:Scan"],
-        resources: ["arn:aws:dynamodb:*:*:table/Bedrock-Monthly-Usage"],
+        resources: [this.monthlyUsageTable.tableArn],
       }),
     );
 
     this.api = new apigw.RestApi(this, "BedUsageApi", {
-      restApiName: "bedrock-usage-api",
+      restApiName: `bedrock-usage-api${envSuffix}`,
       description: "API Gateway for monthly usage statistics",
       deployOptions: {
-        stageName: "prod",
+        stageName: props.environment || "prod",
         throttlingRateLimit: 20,
       },
       defaultCorsPreflightOptions: {
@@ -166,56 +172,56 @@ export default class LambdaLlmProxyConstruct extends Construct {
       value: proxyFn.functionName,
       description:
         "The name of the Lambda function that serves as the Bedrock proxy.",
-      exportName: "BedrockProxyFunctionName",
+      exportName: `BedrockProxyFunctionName${envSuffix}`,
     });
 
     new cdk.CfnOutput(this, "LambdaFunctionArn", {
       value: proxyFn.functionArn,
       description:
         "The ARN of the Lambda function that serves as the Bedrock proxy.",
-      exportName: "BedrockProxyFunctionArn",
+      exportName: `BedrockProxyFunctionArn${envSuffix}`,
     });
 
     new cdk.CfnOutput(this, "ProxyApiInvokeUrl", {
       value: bedrockProxyFunctionUrl.url,
       description: "POST here to call the proxy.",
-      exportName: "BedrockGatewayInvokeUrl",
+      exportName: `BedrockGatewayInvokeUrl${envSuffix}`,
     });
 
     new cdk.CfnOutput(this, "UsageApiInvokeUrl", {
       value: `${this.api.url}v1/usage`,
       description: "GET here to retrieve current monthly usage for a user.",
-      exportName: "BedrockUsageInvokeUrl",
+      exportName: `BedrockUsageInvokeUrl${envSuffix}`,
     });
 
     new cdk.CfnOutput(this, "Region", {
       value: cdk.Stack.of(this).region,
       description: "AWS Region where the stack is deployed",
-      exportName: "BedrockGatewayRegion",
+      exportName: `BedrockGatewayRegion${envSuffix}`,
     });
 
     new cdk.CfnOutput(this, "MonthlyUsageTableName", {
       value: this.monthlyUsageTable.tableName,
       description: "Name of the Bedrock Monthly Usage table",
-      exportName: "BedrockMonthlyUsageTableName",
+      exportName: `BedrockMonthlyUsageTableName${envSuffix}`,
     });
 
     new cdk.CfnOutput(this, "MonthlyUsageTableArn", {
       value: this.monthlyUsageTable.tableArn,
       description: "ARN of the Bedrock Monthly Usage table",
-      exportName: "BedrockMonthlyUsageTableArn",
+      exportName: `BedrockMonthlyUsageTableArn${envSuffix}`,
     });
 
     new cdk.CfnOutput(this, "TransactionsTableName", {
       value: this.transactionsTable.tableName,
       description: "Name of the Bedrock Transactions table",
-      exportName: "BedrockTransactionsTableName",
+      exportName: `BedrockTransactionsTableName${envSuffix}`,
     });
 
     new cdk.CfnOutput(this, "TransactionsTableArn", {
       value: this.transactionsTable.tableArn,
       description: "ARN of the Bedrock Transactions table",
-      exportName: "BedrockTransactionsTableArn",
+      exportName: `BedrockTransactionsTableArn${envSuffix}`,
     });
   }
 }

@@ -12,6 +12,7 @@ import * as agentcore from "@aws-cdk/aws-bedrock-agentcore-alpha";
 export interface AgentCoreConstructProps {
   documentBucket: s3.IBucket;
   chatHistoryTable: dynamodb.ITable;
+  environment?: string;
   modelId?: string;
 }
 
@@ -22,6 +23,11 @@ export default class AgentCoreConstruct extends Construct {
 
   constructor(scope: Construct, id: string, props: AgentCoreConstructProps) {
     super(scope, id);
+
+    const envSuffix = props.environment ? `-${props.environment}` : "";
+    const runtimeSuffix = props.environment
+      ? `_${props.environment.replace(/[^A-Za-z0-9_]/g, "_")}`
+      : "";
 
     const modelId =
       props.modelId ?? "us.anthropic.claude-3-5-haiku-20241022-v1:0";
@@ -102,7 +108,7 @@ export default class AgentCoreConstruct extends Construct {
     );
 
     const runtime = new agentcore.Runtime(this, "DocQARuntime", {
-      runtimeName: "DocumentQAAgent",
+      runtimeName: `DocumentQAAgent${runtimeSuffix}`,
       agentRuntimeArtifact: artifact,
       networkConfiguration:
         agentcore.RuntimeNetworkConfiguration.usingPublicNetwork(),
@@ -117,7 +123,7 @@ export default class AgentCoreConstruct extends Construct {
     });
 
     const endpoint = runtime.addEndpoint("DefaultEndpoint", {
-      description: "Default endpoint for DocumentQAAgent",
+      description: `Default endpoint for DocumentQAAgent${envSuffix}`,
     });
 
     this.runtimeArn = runtime.agentRuntimeArn;
