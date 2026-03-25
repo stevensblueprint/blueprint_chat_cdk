@@ -1,3 +1,4 @@
+import * as agentcore from "@aws-cdk/aws-bedrock-agentcore-alpha";
 import * as cdk from "aws-cdk-lib";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -5,9 +6,8 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
-import * as path from "path";
 import { Construct } from "constructs";
-import * as agentcore from "@aws-cdk/aws-bedrock-agentcore-alpha";
+import * as path from "path";
 
 export interface AgentCoreConstructProps {
   documentBucket: s3.IBucket;
@@ -40,9 +40,7 @@ export default class AgentCoreConstruct extends Construct {
 
     const vectorBucket = new cdk.CfnResource(this, "VectorBucket", {
       type: "AWS::S3Vectors::VectorBucket",
-      properties: {
-        VectorBucketName: vectorBucketName,
-      },
+      properties: { VectorBucketName: vectorBucketName },
     });
 
     const vectorIndex = new cdk.CfnResource(this, "VectorIndex", {
