@@ -146,8 +146,7 @@ exports.handler = async (event: any): Promise<any> => {
           conversationId = parsed.conversationId;
           sources = parsed.sources ?? [];
         }
-      } catch {
-      }
+      } catch {}
     }
 
     return {
