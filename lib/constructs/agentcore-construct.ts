@@ -24,10 +24,44 @@ export default class AgentCoreConstruct extends Construct {
   constructor(scope: Construct, id: string, props: AgentCoreConstructProps) {
     super(scope, id);
 
-    const envSuffix = props.environment ? `-${props.environment}` : "";
-    const runtimeSuffix = props.environment
-      ? `_${props.environment.replace(/[^A-Za-z0-9_]/g, "_")}`
-      : "";
+    const runtimeBaseName = "DocumentQAAgent";
+    const maxRuntimeNameLength = 48;
+    const rawEnvironment = props.environment?.trim() ?? "";
+    const envSuffix = rawEnvironment === "" ? "" : `-${rawEnvironment}`;
+
+    let runtimeSuffix = "";
+    if (rawEnvironment !== "") {
+      const sanitizedEnvironment = rawEnvironment
+        .replace(/[^A-Za-z0-9_]/g, "_")
+        .replace(/_+/g, "_")
+        .replace(/^_+|_+$/g, "");
+
+      if (sanitizedEnvironment.length === 0) {
+        throw new Error(
+          "AgentCoreConstruct: environment must contain at least one alphanumeric character or underscore after sanitization.",
+        );
+      }
+
+      const maxSuffixLen = maxRuntimeNameLength - runtimeBaseName.length;
+      if (maxSuffixLen < 0) {
+        throw new Error(
+          `AgentCoreConstruct: runtime base name '${runtimeBaseName}' exceeds ${maxRuntimeNameLength} characters.`,
+        );
+      }
+
+      runtimeSuffix = `_${sanitizedEnvironment}`.slice(0, maxSuffixLen);
+    }
+
+    const runtimeNameCandidate = `${runtimeBaseName}${runtimeSuffix}`;
+    const runtimeName = /^[A-Za-z]/.test(runtimeNameCandidate)
+      ? runtimeNameCandidate
+      : `A${runtimeNameCandidate}`.slice(0, maxRuntimeNameLength);
+
+    if (!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(runtimeName)) {
+      throw new Error(
+        `AgentCoreConstruct: runtimeName '${runtimeName}' is invalid. Must match [a-zA-Z][a-zA-Z0-9_]{0,47}.`,
+      );
+    }
 
     const modelId =
       props.modelId ?? "us.anthropic.claude-3-5-haiku-20241022-v1:0";
@@ -106,7 +140,7 @@ export default class AgentCoreConstruct extends Construct {
     );
 
     const runtime = new agentcore.Runtime(this, "DocQARuntime", {
-      runtimeName: `DocumentQAAgent${runtimeSuffix}`,
+      runtimeName,
       agentRuntimeArtifact: artifact,
       networkConfiguration:
         agentcore.RuntimeNetworkConfiguration.usingPublicNetwork(),

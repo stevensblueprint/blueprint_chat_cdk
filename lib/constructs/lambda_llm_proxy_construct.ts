@@ -1,10 +1,10 @@
 import * as cdk from "aws-cdk-lib";
-import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
-import * as lambda from "aws-cdk-lib/aws-lambda";
-import * as iam from "aws-cdk-lib/aws-iam";
-import * as path from "path";
-import { Construct } from "constructs";
 import * as apigw from "aws-cdk-lib/aws-apigateway";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import { Construct } from "constructs";
+import * as path from "path";
 
 export interface LambdaLlmProxyConstructProps {
   /**
@@ -28,7 +28,13 @@ export default class LambdaLlmProxyConstruct extends Construct {
   ) {
     super(scope, id);
 
-    const envSuffix = props.environment ? `-${props.environment}` : "";
+    const rawEnvironment = props.environment?.trim().toLowerCase();
+    const normalizedEnvironment =
+      rawEnvironment === undefined || rawEnvironment === "" || rawEnvironment === "prod"
+        ? "prod"
+        : rawEnvironment;
+    const envSuffix =
+      normalizedEnvironment === "prod" ? "" : `-${normalizedEnvironment}`;
     const monthlyUsageTableName = `Bedrock-Monthly-Usage${envSuffix}`;
     const transactionsTableName = `Bedrock-Transactions${envSuffix}`;
 
@@ -104,7 +110,7 @@ export default class LambdaLlmProxyConstruct extends Construct {
       restApiName: `bedrock-usage-api${envSuffix}`,
       description: "API Gateway for monthly usage statistics",
       deployOptions: {
-        stageName: props.environment || "prod",
+        stageName: normalizedEnvironment,
         throttlingRateLimit: 20,
       },
       defaultCorsPreflightOptions: {
