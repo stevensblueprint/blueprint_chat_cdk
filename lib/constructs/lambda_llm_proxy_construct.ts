@@ -30,7 +30,9 @@ export default class LambdaLlmProxyConstruct extends Construct {
 
     const rawEnvironment = props.environment?.trim().toLowerCase();
     const normalizedEnvironment =
-      rawEnvironment === undefined || rawEnvironment === "" || rawEnvironment === "prod"
+      rawEnvironment === undefined ||
+      rawEnvironment === "" ||
+      rawEnvironment === "prod"
         ? "prod"
         : rawEnvironment;
     const envSuffix =
