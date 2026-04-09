@@ -40,7 +40,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     new WebhookLambdaConstruct(this, "NotionWebhookLambda", {
       codePath: "functions/webhook-listener-notion-lambda",
       description:
-        "Lambda function to handle Notion webhooks and store documents in S3",
+        "Lambda function to handle Notion webhooks and enqueue normalized events",
       documentBucket: documentBucket,
       environmentVariables: {
         NOTION_API_KEY: props.NOTION_API_KEY,
@@ -52,7 +52,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     new WebhookLambdaConstruct(this, "DiscordWebhookLambda", {
       codePath: "functions/webhook-listener-discord-lambda",
       description:
-        "Lambda function to handle Discord webhooks and store documents in S3",
+        "Lambda function to handle Discord webhooks and enqueue normalized events",
       documentBucket: documentBucket,
       environmentVariables: {
         DISCORD_API_KEY: props.DISCORD_API_KEY,
@@ -63,7 +63,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     new WebhookLambdaConstruct(this, "DriveWebhookLambda", {
       codePath: "functions/webhook-listener-drive-lambda",
       description:
-        "Lambda function to handle Google Drive webhooks and store documents in S3",
+        "Lambda function to handle Google Drive webhooks and enqueue normalized events",
       documentBucket: documentBucket,
       environmentVariables: {
         DRIVE_API_KEY: props.DRIVE_API_KEY,
@@ -85,7 +85,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     new WebhookLambdaConstruct(this, "WikiWebhookLambda", {
       codePath: "functions/webhook-listener-wiki-lambda",
       description:
-        "Lambda function to handle Wiki webhooks and store documents in S3",
+        "Lambda function to handle Wiki webhooks and enqueue normalized events",
       documentBucket: documentBucket,
       environmentVariables: {
         WIKI_API_KEY: props.WIKI_API_KEY,

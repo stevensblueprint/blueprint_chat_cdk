@@ -1,5 +1,6 @@
 import base64
 import binascii
+import hmac
 import json
 import uuid
 from collections.abc import Mapping
@@ -75,7 +76,7 @@ def _is_authorized(event: dict, expected_key: str) -> bool:
         return False
     if supplied_key.lower().startswith("bearer "):
         supplied_key = supplied_key[7:].strip()
-    return supplied_key == expected_key
+    return hmac.compare_digest(supplied_key, expected_key)
 
 
 def _parse_body(event: dict) -> dict:

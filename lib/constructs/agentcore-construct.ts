@@ -26,12 +26,19 @@ export default class AgentCoreConstruct extends Construct {
 
     const runtimeBaseName = "DocumentQAAgent";
     const maxRuntimeNameLength = 48;
-    const rawEnvironment = props.environment?.trim() ?? "";
-    const envSuffix = rawEnvironment === "" ? "" : `-${rawEnvironment}`;
+    const rawEnvironment = props.environment?.trim().toLowerCase();
+    const normalizedEnvironment =
+      rawEnvironment === undefined ||
+      rawEnvironment === "" ||
+      rawEnvironment === "prod"
+        ? "prod"
+        : rawEnvironment;
+    const envSuffix =
+      normalizedEnvironment === "prod" ? "" : `-${normalizedEnvironment}`;
 
     let runtimeSuffix = "";
-    if (rawEnvironment !== "") {
-      const sanitizedEnvironment = rawEnvironment
+    if (normalizedEnvironment !== "prod") {
+      const sanitizedEnvironment = normalizedEnvironment
         .replace(/[^A-Za-z0-9_]/g, "_")
         .replace(/_+/g, "_")
         .replace(/^_+|_+$/g, "");
