@@ -5,8 +5,12 @@ import { BlueprintChatCdkStack } from "../lib/stacks/blueprint_chat_cdk-stack";
 
 dotenv.config();
 
-const environment = process.env.ENVIRONMENT || "";
-const envSuffix = environment === "" ? "" : `-${environment}`;
+const rawEnvironment = process.env.ENVIRONMENT?.trim().toLowerCase();
+const environment =
+  rawEnvironment === undefined || rawEnvironment === "" || rawEnvironment === "prod"
+    ? "prod"
+    : rawEnvironment;
+const envSuffix = environment === "prod" ? "" : `-${environment}`;
 
 const app = new cdk.App();
 const env: cdk.Environment = {

@@ -76,6 +76,8 @@ def _is_authorized(event: dict, expected_key: str) -> bool:
         return False
     if supplied_key.lower().startswith("bearer "):
         supplied_key = supplied_key[7:].strip()
+    if not supplied_key:
+        return False
     return hmac.compare_digest(supplied_key, expected_key)
 
 

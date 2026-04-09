@@ -89,14 +89,14 @@ def _parse_body(event: dict) -> dict:
             - If "body" is a base64-encoded string and "isBase64Encoded" is truthy, it will be decoded before parsing.
 
     Returns:
-        dict: The parsed JSON object from the request body, or an empty dict when the body is None or empty/whitespace.
+        dict: The parsed JSON object from the request body.
 
     Raises:
         ValueError: If the body is neither a dict nor a string, or if the body cannot be decoded or parsed as a JSON object.
     """
     body = event.get("body")
     if body is None:
-        return {}
+        raise ValueError("Invalid request payload")
     if isinstance(body, dict):
         return body
     if not isinstance(body, str):
@@ -106,7 +106,7 @@ def _parse_body(event: dict) -> dict:
         if event.get("isBase64Encoded"):
             body = base64.b64decode(body, validate=True).decode("utf-8")
         if not body.strip():
-            return {}
+            raise ValueError("Invalid request payload")
         parsed = json.loads(body)
         if not isinstance(parsed, dict):
             raise ValueError("Invalid request payload")

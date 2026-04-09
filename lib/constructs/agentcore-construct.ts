@@ -6,6 +6,7 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
+import { createHash } from "crypto";
 import { Construct } from "constructs";
 import * as path from "path";
 
@@ -56,7 +57,18 @@ export default class AgentCoreConstruct extends Construct {
         );
       }
 
-      runtimeSuffix = `_${sanitizedEnvironment}`.slice(0, maxSuffixLen);
+      if (sanitizedEnvironment.length + 1 <= maxSuffixLen) {
+        runtimeSuffix = `_${sanitizedEnvironment}`;
+      } else {
+        const disambiguatorLength = 6;
+        const disambiguator = createHash("sha256")
+          .update(sanitizedEnvironment)
+          .digest("hex")
+          .slice(0, disambiguatorLength);
+        const maxPrefixLen = Math.max(0, maxSuffixLen - 1 - disambiguatorLength);
+        const truncatedPrefix = sanitizedEnvironment.slice(0, maxPrefixLen);
+        runtimeSuffix = `_${truncatedPrefix}${disambiguator}`;
+      }
     }
 
     const runtimeNameCandidate = `${runtimeBaseName}${runtimeSuffix}`;

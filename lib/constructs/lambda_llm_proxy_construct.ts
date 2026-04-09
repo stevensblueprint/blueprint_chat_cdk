@@ -62,7 +62,9 @@ export default class LambdaLlmProxyConstruct extends Construct {
       memorySize: 512,
       environment: {
         MONTHLY_USAGE_TABLE: this.monthlyUsageTable.tableName,
-        MONTHLY_LIMIT: String(props.monthlyLimit),
+        ...(props.monthlyLimit !== undefined
+          ? { MONTHLY_LIMIT: String(props.monthlyLimit) }
+          : {}),
       },
     });
 
@@ -78,7 +80,9 @@ export default class LambdaLlmProxyConstruct extends Construct {
         REGION: cdk.Stack.of(this).region,
         MONTHLY_USAGE_TABLE: this.monthlyUsageTable.tableName,
         TRANSACTIONS_TABLE: this.transactionsTable.tableName,
-        MONTHLY_LIMIT: String(props.monthlyLimit),
+        ...(props.monthlyLimit !== undefined
+          ? { MONTHLY_LIMIT: String(props.monthlyLimit) }
+          : {}),
       },
     });
 
