@@ -85,20 +85,20 @@ def _parse_body(event: dict) -> dict:
     """
     Parse and validate the HTTP request body from an API Gateway-style event.
 
-    Parses event["body"] and returns a dictionary representation. If the body is None or empty (after optional base64 decoding and whitespace stripping) an empty dict is returned. If the body is already a dict it is returned unchanged. If the body is a JSON string, it is parsed and must produce a dict.
+    Parses event["body"] and returns a dictionary representation. If the body is None or empty (after optional base64 decoding and whitespace stripping), a ValueError is raised. If the body is already a dict it is returned unchanged. If the body is a JSON string, it is parsed and must produce a dict.
 
     Parameters:
         event (dict): API Gateway-style event containing keys like "body" and optional "isBase64Encoded".
 
     Returns:
-        dict: The parsed JSON object from the request body, or an empty dict when the body is absent or empty.
+        dict: The parsed JSON object from the request body.
 
     Raises:
         ValueError: If the body is of an unexpected type or cannot be decoded/parsed as a JSON object.
     """
     body = event.get("body")
     if body is None:
-        return {}
+        raise ValueError("Invalid request payload")
     if isinstance(body, dict):
         return body
     if not isinstance(body, str):
@@ -108,7 +108,7 @@ def _parse_body(event: dict) -> dict:
         if event.get("isBase64Encoded"):
             body = base64.b64decode(body, validate=True).decode("utf-8")
         if not body.strip():
-            return {}
+            raise ValueError("Invalid request payload")
         parsed = json.loads(body)
         if not isinstance(parsed, dict):
             raise ValueError("Invalid request payload")
