@@ -20,7 +20,7 @@ export interface WebhookLambdaConstructProps {
    * Document Bucket
    * /
    */
-  documentBucket: s3.IBucket;
+  documentBucket?: s3.IBucket;
 
   /**
    * Environment Variables
@@ -40,6 +40,14 @@ export default class WebhookLambdaConstruct extends Construct {
     props: WebhookLambdaConstructProps,
   ) {
     super(scope, id);
+    const lambdaEnvironment = {
+      ...props.environmentVariables,
+      WEBHOOK_EVENTS_QUEUE_URL: props.webhookEventsQueue.queueUrl,
+      ...(props.documentBucket
+        ? { DOCUMENT_BUCKET: props.documentBucket.bucketName }
+        : {}),
+    };
+
     const webhookListenerFn = new lambda.Function(this, "WebhookListenerFn", {
       runtime: lambda.Runtime.PYTHON_3_10,
       handler: "main.handler",
@@ -48,15 +56,13 @@ export default class WebhookLambdaConstruct extends Construct {
       ),
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
-      environment: {
-        ...props.environmentVariables,
-        DOCUMENT_BUCKET: props.documentBucket.bucketName,
-        WEBHOOK_EVENTS_QUEUE_URL: props.webhookEventsQueue.queueUrl,
-      },
+      environment: lambdaEnvironment,
       description: props.description,
     });
 
-    props.documentBucket.grantReadWrite(webhookListenerFn);
+    if (props.documentBucket) {
+      props.documentBucket.grantReadWrite(webhookListenerFn);
+    }
     props.webhookEventsQueue.grantSendMessages(webhookListenerFn);
 
     const fnUrl = webhookListenerFn.addFunctionUrl({

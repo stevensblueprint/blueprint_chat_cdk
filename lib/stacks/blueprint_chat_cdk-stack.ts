@@ -19,10 +19,10 @@ export class BlueprintChatCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BlueprintChatCdkStackProps) {
     super(scope, id, props);
 
-    const envSuffix =
-      props.environment === "" || props.environment === "prod"
-        ? ""
-        : `-${props.environment}`;
+    const normalizedEnv = props.environment?.trim().toLowerCase() ?? "";
+    const environment =
+      normalizedEnv === "" || normalizedEnv === "prod" ? "prod" : normalizedEnv;
+    const envSuffix = environment === "prod" ? "" : `-${environment}`;
 
     const documentBucket = new s3.Bucket(this, "DocumentBucket", {
       bucketName: `blueprint-chat-documents-${cdk.Stack.of(this).account.toLowerCase()}${envSuffix}`,
@@ -36,7 +36,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
 
     const lambdaLlmProxy = new LambdaLlmProxyConstruct(this, "LambdaLlmProxy", {
       monthlyLimit: 6.6,
-      environment: props.environment,
+      environment,
     });
 
     // Notion
@@ -44,7 +44,6 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       codePath: "functions/webhook-listener-notion-lambda",
       description:
         "Lambda function to handle Notion webhooks and enqueue normalized events",
-      documentBucket: documentBucket,
       environmentVariables: {
         NOTION_API_KEY: props.NOTION_API_KEY,
       },
@@ -56,7 +55,6 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       codePath: "functions/webhook-listener-discord-lambda",
       description:
         "Lambda function to handle Discord webhooks and enqueue normalized events",
-      documentBucket: documentBucket,
       environmentVariables: {
         DISCORD_API_KEY: props.DISCORD_API_KEY,
       },
@@ -67,7 +65,6 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       codePath: "functions/webhook-listener-drive-lambda",
       description:
         "Lambda function to handle Google Drive webhooks and enqueue normalized events",
-      documentBucket: documentBucket,
       environmentVariables: {
         DRIVE_API_KEY: props.DRIVE_API_KEY,
       },
@@ -78,7 +75,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       this,
       "ChatHistoryConstruct",
       {
-        environment: props.environment,
+        environment,
         s3BucketName: `blueprint-chat-history${envSuffix}`,
         chatHistoryTableName: `ChatHistory${envSuffix}`,
       },
@@ -89,7 +86,6 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       codePath: "functions/webhook-listener-wiki-lambda",
       description:
         "Lambda function to handle Wiki webhooks and enqueue normalized events",
-      documentBucket: documentBucket,
       environmentVariables: {
         WIKI_API_KEY: props.WIKI_API_KEY,
       },
@@ -99,7 +95,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     const agentCore = new AgentCoreConstruct(this, "AgentCore", {
       documentBucket: documentBucket,
       chatHistoryTable: chatHistoryConstruct.chatHistoryTable,
-      environment: props.environment,
+      environment,
     });
 
     lambdaLlmProxy.v1Resource

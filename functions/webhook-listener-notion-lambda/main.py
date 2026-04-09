@@ -1,5 +1,6 @@
 import base64
 import binascii
+import hashlib
 import hmac
 import json
 import uuid
@@ -179,7 +180,15 @@ def _normalize_event(payload: dict, raw_event: dict) -> dict:
     """
     now = datetime.now(timezone.utc).isoformat()
     event_id = str(uuid.uuid4())
-    source_change_id = payload.get("change_id") or payload.get("id") or event_id
+    canonical_payload = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    payload_hash = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()[:24]
+    source_change_id = (
+        payload.get("change_id")
+        or payload.get("id")
+        or _get_header(raw_event, "x-notion-delivery-id")
+        or _get_header(raw_event, "x-request-id")
+        or payload_hash
+    )
     object_id = (
         payload.get("object_id")
         or payload.get("source_item_id")
