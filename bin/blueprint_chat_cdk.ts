@@ -5,8 +5,18 @@ import { BlueprintChatCdkStack } from "../lib/stacks/blueprint_chat_cdk-stack";
 
 dotenv.config();
 
-const environment = process.env.ENVIRONMENT || "";
-const envSuffix = environment === "" ? "" : `-${environment}`;
+const rawEnvironment = process.env.ENVIRONMENT?.trim().toLowerCase();
+const sanitizedEnvironment =
+  rawEnvironment
+    ?.replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "") || "";
+const canonicalEnvironment =
+  sanitizedEnvironment === "" || sanitizedEnvironment === "prod"
+    ? "prod"
+    : sanitizedEnvironment;
+const envSuffix =
+  canonicalEnvironment === "prod" ? "" : `-${canonicalEnvironment}`;
 
 const app = new cdk.App();
 const env: cdk.Environment = {
@@ -17,7 +27,7 @@ const env: cdk.Environment = {
 new BlueprintChatCdkStack(app, `blueprint-chat-cdk${envSuffix}`, {
   description: "Blueprint Chat CDK Stack",
   env: env,
-  environment,
+  environment: canonicalEnvironment,
   NOTION_API_KEY: process.env.NOTION_API_KEY || "",
   DISCORD_API_KEY: process.env.DISCORD_API_KEY || "",
   DRIVE_API_KEY: process.env.DRIVE_API_KEY || "",

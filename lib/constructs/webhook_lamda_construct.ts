@@ -1,9 +1,9 @@
-import * as s3 from "aws-cdk-lib/aws-s3";
-import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as cdk from "aws-cdk-lib";
-import * as path from "path";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as s3 from "aws-cdk-lib/aws-s3";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs";
+import * as path from "path";
 
 export interface WebhookLambdaConstructProps {
   /**
@@ -20,7 +20,7 @@ export interface WebhookLambdaConstructProps {
    * Document Bucket
    * /
    */
-  documentBucket: s3.IBucket;
+  documentBucket?: s3.IBucket;
 
   /**
    * Environment Variables
@@ -28,9 +28,9 @@ export interface WebhookLambdaConstructProps {
   environmentVariables: { [key: string]: string };
 
   /**
-   * Ingestion Queue
+   * Webhook Events Queue
    */
-  ingestionQueue: sqs.IQueue;
+  webhookEventsQueue: sqs.IQueue;
 }
 
 export default class WebhookLambdaConstruct extends Construct {
@@ -40,6 +40,14 @@ export default class WebhookLambdaConstruct extends Construct {
     props: WebhookLambdaConstructProps,
   ) {
     super(scope, id);
+    const lambdaEnvironment = {
+      ...props.environmentVariables,
+      WEBHOOK_EVENTS_QUEUE_URL: props.webhookEventsQueue.queueUrl,
+      ...(props.documentBucket
+        ? { DOCUMENT_BUCKET: props.documentBucket.bucketName }
+        : {}),
+    };
+
     const webhookListenerFn = new lambda.Function(this, "WebhookListenerFn", {
       runtime: lambda.Runtime.PYTHON_3_10,
       handler: "main.handler",
@@ -48,16 +56,14 @@ export default class WebhookLambdaConstruct extends Construct {
       ),
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
-      environment: {
-        ...props.environmentVariables,
-        DOCUMENT_BUCKET: props.documentBucket.bucketName,
-        INGESTION_QUEUE_URL: props.ingestionQueue.queueUrl,
-      },
+      environment: lambdaEnvironment,
       description: props.description,
     });
 
-    props.documentBucket.grantReadWrite(webhookListenerFn);
-    props.ingestionQueue.grantSendMessages(webhookListenerFn);
+    if (props.documentBucket) {
+      props.documentBucket.grantReadWrite(webhookListenerFn);
+    }
+    props.webhookEventsQueue.grantSendMessages(webhookListenerFn);
 
     const fnUrl = webhookListenerFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
