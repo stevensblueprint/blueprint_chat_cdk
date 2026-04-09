@@ -49,14 +49,14 @@ export class IngestionQueueConstruct extends Construct {
 
     // Dead-Letter Queue
     this.dlq = new sqs.Queue(this, "IngestionDLQ", {
-      queueName: "IngestionDLQ",
+      queueName: `${cdk.Stack.of(this).stackName}-IngestionDLQ`,
       retentionPeriod: cdk.Duration.days(14),
       encryption: sqs.QueueEncryption.SQS_MANAGED,
     });
 
     // Main Ingestion Queue
     this.queue = new sqs.Queue(this, "IngestionQueue", {
-      queueName: "IngestionQueue",
+      queueName: `${cdk.Stack.of(this).stackName}-IngestionQueue`,
       retentionPeriod,
       visibilityTimeout: cdk.Duration.minutes(5),
       encryption: sqs.QueueEncryption.SQS_MANAGED,
@@ -69,7 +69,7 @@ export class IngestionQueueConstruct extends Construct {
     // ── DLQ CloudWatch Alarm ─────────────────────────────────────────────────
     // Threshold = 1: any DLQ depth > 0 is always worth investigating immediately.
     this.dlqAlarm = new cloudwatch.Alarm(this, "DLQDepthAlarm", {
-      alarmName: "IngestionDLQ-MessagesVisible",
+      alarmName: `${cdk.Stack.of(this).stackName}-IngestionDLQ-MessagesVisible`,
       alarmDescription:
         "One or more messages have been dead-lettered. " +
         "Investigate, apply a fix, then redrive or discard.",
