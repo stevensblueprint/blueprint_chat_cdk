@@ -1,3 +1,4 @@
+import * as agentcore from "@aws-cdk/aws-bedrock-agentcore-alpha";
 import * as cdk from "aws-cdk-lib";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -5,13 +6,14 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
-import * as path from "path";
+import { createHash } from "crypto";
 import { Construct } from "constructs";
-import * as agentcore from "@aws-cdk/aws-bedrock-agentcore-alpha";
+import * as path from "path";
 
 export interface AgentCoreConstructProps {
   documentBucket: s3.IBucket;
   chatHistoryTable: dynamodb.ITable;
+  environment?: string;
   modelId?: string;
 }
 
@@ -22,6 +24,66 @@ export default class AgentCoreConstruct extends Construct {
 
   constructor(scope: Construct, id: string, props: AgentCoreConstructProps) {
     super(scope, id);
+
+    const runtimeBaseName = "DocumentQAAgent";
+    const maxRuntimeNameLength = 48;
+    const rawEnvironment = props.environment?.trim().toLowerCase();
+    const normalizedEnvironment =
+      rawEnvironment === undefined ||
+      rawEnvironment === "" ||
+      rawEnvironment === "prod"
+        ? "prod"
+        : rawEnvironment;
+    const envSuffix =
+      normalizedEnvironment === "prod" ? "" : `-${normalizedEnvironment}`;
+
+    let runtimeSuffix = "";
+    if (normalizedEnvironment !== "prod") {
+      const sanitizedEnvironment = normalizedEnvironment
+        .replace(/[^A-Za-z0-9_]/g, "_")
+        .replace(/_+/g, "_")
+        .replace(/^_+|_+$/g, "");
+
+      if (sanitizedEnvironment.length === 0) {
+        throw new Error(
+          "AgentCoreConstruct: environment must contain at least one alphanumeric character or underscore after sanitization.",
+        );
+      }
+
+      const maxSuffixLen = maxRuntimeNameLength - runtimeBaseName.length;
+      if (maxSuffixLen < 0) {
+        throw new Error(
+          `AgentCoreConstruct: runtime base name '${runtimeBaseName}' exceeds ${maxRuntimeNameLength} characters.`,
+        );
+      }
+
+      if (sanitizedEnvironment.length + 1 <= maxSuffixLen) {
+        runtimeSuffix = `_${sanitizedEnvironment}`;
+      } else {
+        const disambiguatorLength = 6;
+        const disambiguator = createHash("sha256")
+          .update(sanitizedEnvironment)
+          .digest("hex")
+          .slice(0, disambiguatorLength);
+        const maxPrefixLen = Math.max(
+          0,
+          maxSuffixLen - 1 - disambiguatorLength,
+        );
+        const truncatedPrefix = sanitizedEnvironment.slice(0, maxPrefixLen);
+        runtimeSuffix = `_${truncatedPrefix}${disambiguator}`;
+      }
+    }
+
+    const runtimeNameCandidate = `${runtimeBaseName}${runtimeSuffix}`;
+    const runtimeName = /^[A-Za-z]/.test(runtimeNameCandidate)
+      ? runtimeNameCandidate
+      : `A${runtimeNameCandidate}`.slice(0, maxRuntimeNameLength);
+
+    if (!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(runtimeName)) {
+      throw new Error(
+        `AgentCoreConstruct: runtimeName '${runtimeName}' is invalid. Must match [a-zA-Z][a-zA-Z0-9_]{0,47}.`,
+      );
+    }
 
     const modelId =
       props.modelId ?? "us.anthropic.claude-3-5-haiku-20241022-v1:0";
@@ -34,9 +96,7 @@ export default class AgentCoreConstruct extends Construct {
 
     const vectorBucket = new cdk.CfnResource(this, "VectorBucket", {
       type: "AWS::S3Vectors::VectorBucket",
-      properties: {
-        VectorBucketName: vectorBucketName,
-      },
+      properties: { VectorBucketName: vectorBucketName },
     });
 
     const vectorIndex = new cdk.CfnResource(this, "VectorIndex", {
@@ -102,7 +162,7 @@ export default class AgentCoreConstruct extends Construct {
     );
 
     const runtime = new agentcore.Runtime(this, "DocQARuntime", {
-      runtimeName: "DocumentQAAgent",
+      runtimeName,
       agentRuntimeArtifact: artifact,
       networkConfiguration:
         agentcore.RuntimeNetworkConfiguration.usingPublicNetwork(),
@@ -117,7 +177,7 @@ export default class AgentCoreConstruct extends Construct {
     });
 
     const endpoint = runtime.addEndpoint("DefaultEndpoint", {
-      description: "Default endpoint for DocumentQAAgent",
+      description: `Default endpoint for DocumentQAAgent${envSuffix}`,
     });
 
     this.runtimeArn = runtime.agentRuntimeArn;
