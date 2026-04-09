@@ -7,7 +7,9 @@ dotenv.config();
 
 const rawEnvironment = process.env.ENVIRONMENT?.trim().toLowerCase();
 const environment =
-  rawEnvironment === undefined || rawEnvironment === "" || rawEnvironment === "prod"
+  rawEnvironment === undefined ||
+  rawEnvironment === "" ||
+  rawEnvironment === "prod"
     ? "prod"
     : rawEnvironment;
 const envSuffix = environment === "prod" ? "" : `-${environment}`;

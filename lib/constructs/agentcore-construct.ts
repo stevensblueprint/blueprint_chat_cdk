@@ -65,7 +65,10 @@ export default class AgentCoreConstruct extends Construct {
           .update(sanitizedEnvironment)
           .digest("hex")
           .slice(0, disambiguatorLength);
-        const maxPrefixLen = Math.max(0, maxSuffixLen - 1 - disambiguatorLength);
+        const maxPrefixLen = Math.max(
+          0,
+          maxSuffixLen - 1 - disambiguatorLength,
+        );
         const truncatedPrefix = sanitizedEnvironment.slice(0, maxPrefixLen);
         runtimeSuffix = `_${truncatedPrefix}${disambiguator}`;
       }
