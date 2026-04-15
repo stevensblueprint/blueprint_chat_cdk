@@ -13,6 +13,7 @@ export interface AgentCoreConstructProps {
   documentBucket: s3.IBucket;
   chatHistoryTable: dynamodb.ITable;
   modelId?: string;
+  environment?: string;
 }
 
 export default class AgentCoreConstruct extends Construct {

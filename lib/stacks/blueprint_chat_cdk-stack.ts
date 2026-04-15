@@ -1,13 +1,13 @@
-import * as s3 from "aws-cdk-lib/aws-s3";
-import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as cdk from "aws-cdk-lib";
+import * as s3 from "aws-cdk-lib/aws-s3";
 import * as apigw from "aws-cdk-lib/aws-apigateway";
 import { Construct } from "constructs";
 import LambdaLlmProxyConstruct from "../constructs/lambda_llm_proxy_construct";
 import WebhookLambdaConstruct from "../constructs/webhook_lamda_construct";
+import { IngestionQueueConstruct } from "../constructs/ingestion_queue_construct";
 import ChatHistoryConstruct from "../constructs/chat-history-construct";
 import AgentCoreConstruct from "../constructs/agentcore-construct";
-import LambdaIngestionConstruct from "../constructs/lambda_ingestion_construct";
+import { IngestionWorkerConstruct } from "../constructs/ingestion_worker_construct";
 
 export interface BlueprintChatCdkStackProps extends cdk.StackProps {
   environment: string;
@@ -21,7 +21,10 @@ export class BlueprintChatCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BlueprintChatCdkStackProps) {
     super(scope, id, props);
 
-    const envSuffix = props.environment === "" ? "" : `-${props.environment}`;
+    const normalizedEnv = props.environment?.trim().toLowerCase() ?? "";
+    const environment =
+      normalizedEnv === "" || normalizedEnv === "prod" ? "prod" : normalizedEnv;
+    const envSuffix = environment === "prod" ? "" : `-${environment}`;
 
     const documentBucket = new s3.Bucket(this, "DocumentBucket", {
       bucketName: `blueprint-chat-documents-${cdk.Stack.of(this).account.toLowerCase()}${envSuffix}`,
@@ -30,45 +33,49 @@ export class BlueprintChatCdkStack extends cdk.Stack {
 
     const lambdaLlmProxy = new LambdaLlmProxyConstruct(this, "LambdaLlmProxy", {
       monthlyLimit: 6.6,
+      environment,
     });
+
+    const ingestion = new IngestionQueueConstruct(this, "Ingestion");
+    const webhookEventsQueue = ingestion.queue;
 
     // Notion
     new WebhookLambdaConstruct(this, "NotionWebhookLambda", {
       codePath: "functions/webhook-listener-notion-lambda",
       description:
-        "Lambda function to handle Notion webhooks and store documents in S3",
-      documentBucket: documentBucket,
+        "Lambda function to handle Notion webhooks and enqueue normalized events",
       environmentVariables: {
         NOTION_API_KEY: props.NOTION_API_KEY,
       },
+      webhookEventsQueue,
     });
 
     // Discord
     new WebhookLambdaConstruct(this, "DiscordWebhookLambda", {
       codePath: "functions/webhook-listener-discord-lambda",
       description:
-        "Lambda function to handle Discord webhooks and store documents in S3",
-      documentBucket: documentBucket,
+        "Lambda function to handle Discord webhooks and enqueue normalized events",
       environmentVariables: {
         DISCORD_API_KEY: props.DISCORD_API_KEY,
       },
+      webhookEventsQueue,
     });
 
     new WebhookLambdaConstruct(this, "DriveWebhookLambda", {
       codePath: "functions/webhook-listener-drive-lambda",
       description:
-        "Lambda function to handle Google Drive webhooks and store documents in S3",
-      documentBucket: documentBucket,
+        "Lambda function to handle Google Drive webhooks and enqueue normalized events",
       environmentVariables: {
         DRIVE_API_KEY: props.DRIVE_API_KEY,
       },
+      webhookEventsQueue,
     });
 
     const chatHistoryConstruct = new ChatHistoryConstruct(
       this,
       "ChatHistoryConstruct",
       {
-        environment: props.environment,
+        environment,
         s3BucketName: `blueprint-chat-history${envSuffix}`,
         chatHistoryTableName: `ChatHistory${envSuffix}`,
       },
@@ -78,16 +85,17 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     new WebhookLambdaConstruct(this, "WikiWebhookLambda", {
       codePath: "functions/webhook-listener-wiki-lambda",
       description:
-        "Lambda function to handle Wiki webhooks and store documents in S3",
-      documentBucket: documentBucket,
+        "Lambda function to handle Wiki webhooks and enqueue normalized events",
       environmentVariables: {
         WIKI_API_KEY: props.WIKI_API_KEY,
       },
+      webhookEventsQueue,
     });
 
     const agentCore = new AgentCoreConstruct(this, "AgentCore", {
       documentBucket: documentBucket,
       chatHistoryTable: chatHistoryConstruct.chatHistoryTable,
+      environment,
     });
 
     lambdaLlmProxy.v1Resource
@@ -107,14 +115,8 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       exportName: `AgentStreamingUrl${envSuffix}`,
     });
 
-    const ingestionQueue = new sqs.Queue(this, "IngestionQueue", {
-      queueName: `blueprint-chat-ingestion${envSuffix}`,
-      visibilityTimeout: cdk.Duration.seconds(60),
-      retentionPeriod: cdk.Duration.days(4),
-    });
-
-    new LambdaIngestionConstruct(this, "LambdaIngestionWorker", {
-      ingestionQueue,
+    new IngestionWorkerConstruct(this, "IngestionWorker", {
+      queue: ingestion.queue,
       documentBucket,
       notionApiKey: props.NOTION_API_KEY,
       driveApiKey: props.DRIVE_API_KEY,
