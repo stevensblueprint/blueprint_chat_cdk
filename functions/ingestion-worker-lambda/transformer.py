@@ -2,6 +2,17 @@ def _rich_text_to_str(rich_texts: list) -> str:
     return "".join(rt.get("plain_text", "") for rt in rich_texts)
 
 
+def notion_page_to_markdown(title: str, blocks: list) -> str:
+    """Combines page title and body blocks into a single Markdown document."""
+    parts = []
+    if title:
+        parts.append(f"# {title}")
+    body = notion_blocks_to_markdown(blocks)
+    if body:
+        parts.append(body)
+    return "\n\n".join(parts)
+
+
 def notion_blocks_to_markdown(blocks: list) -> str:
     lines = []
     for block in blocks:

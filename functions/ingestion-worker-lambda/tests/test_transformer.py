@@ -1,7 +1,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from transformer import notion_blocks_to_markdown
+from transformer import notion_blocks_to_markdown, notion_page_to_markdown
 
 
 def _block(btype: str, text: str, extra: dict = None) -> dict:
@@ -61,3 +61,20 @@ def test_unsupported_block_skipped():
 
 def test_empty_blocks():
     assert notion_blocks_to_markdown([]) == ""
+
+
+def test_notion_page_to_markdown_with_title():
+    blocks = [_block("paragraph", "Some content")]
+    md = notion_page_to_markdown("My Page", blocks)
+    assert md.startswith("# My Page")
+    assert "Some content" in md
+
+
+def test_notion_page_to_markdown_no_title():
+    blocks = [_block("paragraph", "Some content")]
+    md = notion_page_to_markdown("", blocks)
+    assert md == "Some content"
+
+
+def test_notion_page_to_markdown_empty():
+    assert notion_page_to_markdown("", []) == ""
