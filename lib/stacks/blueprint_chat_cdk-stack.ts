@@ -96,14 +96,12 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         new apigw.LambdaIntegration(agentCore.agentProxyFn, { proxy: true }),
       );
 
-    lambdaLlmProxy.v1Resource
-      .addResource("chat-history")
-      .addMethod(
-        "ANY",
-        new apigw.LambdaIntegration(chatHistoryConstruct.chatHistoryLambda, {
-          proxy: true,
-        }),
-      );
+    lambdaLlmProxy.v1Resource.addResource("chat-history").addMethod(
+      "ANY",
+      new apigw.LambdaIntegration(chatHistoryConstruct.chatHistoryLambda, {
+        proxy: true,
+      }),
+    );
 
     new cdk.CfnOutput(this, "ChatHistoryApiUrl", {
       value: `${lambdaLlmProxy.api.url}v1/chat-history`,
