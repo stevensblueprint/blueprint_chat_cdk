@@ -1,6 +1,7 @@
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as cdk from "aws-cdk-lib";
 import * as apigw from "aws-cdk-lib/aws-apigateway";
+import * as cognito from "aws-cdk-lib/aws-cognito";
 import { Construct } from "constructs";
 import LambdaLlmProxyConstruct from "../constructs/lambda_llm_proxy_construct";
 import WebhookLambdaConstruct from "../constructs/webhook_lamda_construct";
@@ -37,6 +38,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
 
     const lambdaLlmProxy = new LambdaLlmProxyConstruct(this, "LambdaLlmProxy", {
       monthlyLimit: 6.6,
+      environment: props.environment,
     });
 
     // Notion
@@ -93,6 +95,18 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         "POST",
         new apigw.LambdaIntegration(agentCore.agentProxyFn, { proxy: true }),
       );
+
+    lambdaLlmProxy.v1Resource
+      .addResource("chat-history")
+      .addMethod(
+        "ANY",
+        new apigw.LambdaIntegration(chatHistoryConstruct.chatHistoryLambda, { proxy: true }),
+      )
+
+    new cdk.CfnOutput(this, "ChatHistoryApiUrl", {
+      value: `${lambdaLlmProxy.api.url}v1/chat-history`,
+      exportName: `ChatHistoryApiUrl${envSuffix}`,
+    });
 
     new cdk.CfnOutput(this, "AgentApiUrl", {
       value: `${lambdaLlmProxy.api.url}v1/agent`,
