@@ -100,8 +100,10 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       .addResource("chat-history")
       .addMethod(
         "ANY",
-        new apigw.LambdaIntegration(chatHistoryConstruct.chatHistoryLambda, { proxy: true }),
-      )
+        new apigw.LambdaIntegration(chatHistoryConstruct.chatHistoryLambda, {
+          proxy: true,
+        }),
+      );
 
     new cdk.CfnOutput(this, "ChatHistoryApiUrl", {
       value: `${lambdaLlmProxy.api.url}v1/chat-history`,
