@@ -170,12 +170,6 @@ export default class LambdaLlmProxyConstruct extends Construct {
       apiKeyRequired: false,
     });
 
-    inferenceUsageFn.addPermission("AllowApiGatewayInvoke", {
-      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
-      action: "lambda:InvokeFunction",
-      sourceArn: this.api.arnForExecuteApi("*", "/*", "*"),
-    });
-
     const bedrockProxyFunctionUrl = proxyFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
       invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
