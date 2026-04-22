@@ -21,14 +21,33 @@ const s3Client = new S3Client({});
 const TABLE_NAME = process.env.DYNAMODB_TABLE!;
 const BUCKET_NAME = process.env.S3_BUCKET!;
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type,Authorization",
+  "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+  "Content-Type": "application/json",
+};
+
 export const handler = async (event: any) => {
-  const { httpMethod, path, body, queryStringParameters } = event;
+  const { httpMethod, body, queryStringParameters } = event;
+
+  if (httpMethod === "OPTIONS") {
+    return { statusCode: 200, headers: CORS_HEADERS, body: "" };
+  }
+
+  const rawPath = event.path || "";
+  const conversationIndex = rawPath.indexOf("/conversations");
+  const path =
+    conversationIndex !== -1 ? rawPath.substring(conversationIndex) : rawPath;
+
   const userId =
-    queryStringParameters?.userId || JSON.parse(body || "{}").userId;
+    queryStringParameters?.userId ||
+    (body ? JSON.parse(body).userId : undefined);
 
   if (!userId || typeof userId !== "string") {
     return {
       statusCode: 400,
+      headers: CORS_HEADERS,
       body: JSON.stringify({ error: "Missing or invalid userId format." }),
     };
   }
@@ -36,6 +55,7 @@ export const handler = async (event: any) => {
   if (!/^[a-zA-Z0-9-]+$/.test(userId) || userId.length > 50) {
     return {
       statusCode: 400,
+      headers: CORS_HEADERS,
       body: JSON.stringify({ error: "Malformed userId" }),
     };
   }
@@ -51,11 +71,16 @@ export const handler = async (event: any) => {
             ExpressionAttributeValues: { ":uid": userId },
           }),
         );
-        return { statusCode: 200, body: JSON.stringify(response.Items) };
+        return {
+          statusCode: 200,
+          headers: CORS_HEADERS,
+          body: JSON.stringify(response.Items),
+        };
       } catch (error) {
         console.error("DynamoDB QueryCommand failed:", error);
         return {
           statusCode: 502,
+          headers: CORS_HEADERS,
           body: JSON.stringify({
             error: "Failed to fetch conversations from database.",
           }),
@@ -70,31 +95,34 @@ export const handler = async (event: any) => {
 
       try {
         const s3Response = await s3Client.send(
-          new GetObjectCommand({
-            Bucket: BUCKET_NAME,
-            Key: s3Key,
-          }),
+          new GetObjectCommand({ Bucket: BUCKET_NAME, Key: s3Key }),
         );
 
         if (!s3Response.Body) {
           return {
             statusCode: 404,
+            headers: CORS_HEADERS,
             body: JSON.stringify({ error: "Conversation data is empty." }),
           };
         }
         const threadData = await s3Response.Body.transformToString();
-        return { statusCode: 200, body: threadData };
+        return {
+          statusCode: 200,
+          headers: CORS_HEADERS,
+          body: threadData,
+        };
       } catch (error: any) {
         console.error("S3 GetObjectCommand failed:", error);
-        // Explicitly check if the file is missing in S3
         if (error.name === "NoSuchKey") {
           return {
             statusCode: 404,
+            headers: CORS_HEADERS,
             body: JSON.stringify({ error: "Conversation not found." }),
           };
         }
         return {
           statusCode: 502,
+          headers: CORS_HEADERS,
           body: JSON.stringify({
             error: "Failed to retrieve conversation from storage.",
           }),
@@ -104,23 +132,35 @@ export const handler = async (event: any) => {
 
     // POST /conversations
     if (httpMethod === "POST" && path === "/conversations") {
-      if (!body)
+      if (!body) {
         return {
           statusCode: 400,
+          headers: CORS_HEADERS,
           body: JSON.stringify({ error: "Missing request body" }),
         };
+      }
 
-      const parsedBody = JSON.parse(body);
-      if (!parsedBody.initialMessage)
+      let parsedBody;
+      try {
+        parsedBody = JSON.parse(body);
+      } catch (error) {
         return {
           statusCode: 400,
+          headers: CORS_HEADERS,
+          body: JSON.stringify({ error: "Invalid JSON in request body" }),
+        };
+      }
+
+      if (!parsedBody.initialMessage) {
+        return {
+          statusCode: 400,
+          headers: CORS_HEADERS,
           body: JSON.stringify({ error: "Missing initialMessage" }),
         };
+      }
 
       const conversationId = parsedBody.conversationId || uuidv4();
       const title = parsedBody.title || "New Conversation";
-      const initialTurnId = parsedBody.turnId || uuidv4();
-
       const timestamp = new Date().toISOString();
       const s3Key = `users/${userId}/conversations/${conversationId}/thread.json`;
 
@@ -130,13 +170,7 @@ export const handler = async (event: any) => {
         title,
         createdAt: timestamp,
         updatedAt: timestamp,
-        turns: [
-          {
-            turnId: initialTurnId,
-            createdAt: timestamp,
-            messages: { user: { content: parsedBody.initialMessage } },
-          },
-        ],
+        turns: [],
       };
 
       // Write to S3
@@ -153,6 +187,7 @@ export const handler = async (event: any) => {
         console.error("S3 PutObjectCommand failed:", error);
         return {
           statusCode: 502,
+          headers: CORS_HEADERS,
           body: JSON.stringify({
             error: "Failed to initialize conversation storage.",
           }),
@@ -176,26 +211,30 @@ export const handler = async (event: any) => {
         );
       } catch (error) {
         console.error("DynamoDB PutCommand failed. Rolling back S3:", error);
-        // Rollback the S3 file to prevent dangling pointers
         try {
           await s3Client.send(
             new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: s3Key }),
           );
         } catch (rollbackError) {
           console.error(
-            "CRITICAL: Failed to rollback S3 object after DynamoDB failure:",
+            "CRITICAL: Failed to rollback S3 object:",
             rollbackError,
           );
         }
         return {
           statusCode: 502,
+          headers: CORS_HEADERS,
           body: JSON.stringify({
             error: "Failed to register conversation in database.",
           }),
         };
       }
 
-      return { statusCode: 201, body: JSON.stringify(initialThread) };
+      return {
+        statusCode: 201,
+        headers: CORS_HEADERS,
+        body: JSON.stringify(initialThread),
+      };
     }
 
     // POST /conversations/{conversationId}/turns
@@ -204,11 +243,29 @@ export const handler = async (event: any) => {
       path.match(/^\/conversations\/[^\/]+\/turns$/)
     ) {
       const conversationId = path.split("/")[2];
-      const parsedBody = JSON.parse(body);
+
+      let parsedBody;
+      try {
+        parsedBody = JSON.parse(body);
+      } catch (error) {
+        return {
+          statusCode: 400,
+          headers: CORS_HEADERS,
+          body: JSON.stringify({ error: "Invalid JSON in request body" }),
+        };
+      }
+
+      if (!parsedBody.message) {
+        return {
+          statusCode: 400,
+          headers: CORS_HEADERS,
+          body: JSON.stringify({ error: "Missing message in request body" }),
+        };
+      }
+
       const s3Key = `users/${userId}/conversations/${conversationId}/thread.json`;
       const newTimestamp = new Date().toISOString();
 
-      // Fetch from S3
       let thread;
       try {
         const s3Object = await s3Client.send(
@@ -218,13 +275,16 @@ export const handler = async (event: any) => {
         thread = JSON.parse(await s3Object.Body.transformToString());
       } catch (error: any) {
         console.error("S3 GetObjectCommand failed during append:", error);
-        if (error.name === "NoSuchKey")
+        if (error.name === "NoSuchKey") {
           return {
             statusCode: 404,
+            headers: CORS_HEADERS,
             body: JSON.stringify({ error: "Conversation not found." }),
           };
+        }
         return {
           statusCode: 502,
+          headers: CORS_HEADERS,
           body: JSON.stringify({
             error: "Failed to read conversation from storage.",
           }),
@@ -251,6 +311,7 @@ export const handler = async (event: any) => {
         if (error.name === "ConditionalCheckFailedException") {
           return {
             statusCode: 409,
+            headers: CORS_HEADERS,
             body: JSON.stringify({
               error: "Concurrent modification detected. Please retry.",
             }),
@@ -259,6 +320,7 @@ export const handler = async (event: any) => {
         console.error("DynamoDB UpdateCommand failed:", error);
         return {
           statusCode: 502,
+          headers: CORS_HEADERS,
           body: JSON.stringify({ error: "Failed to update database pointer." }),
         };
       }
@@ -288,13 +350,18 @@ export const handler = async (event: any) => {
         console.error("S3 PutObjectCommand failed during append:", error);
         return {
           statusCode: 502,
+          headers: CORS_HEADERS,
           body: JSON.stringify({
             error: "Database updated, but failed to write payload to storage.",
           }),
         };
       }
 
-      return { statusCode: 200, body: JSON.stringify(newTurn) };
+      return {
+        statusCode: 200,
+        headers: CORS_HEADERS,
+        body: JSON.stringify(newTurn),
+      };
     }
 
     // DELETE /conversations/{conversationId}
@@ -311,6 +378,7 @@ export const handler = async (event: any) => {
         console.error("S3 DeleteObjectCommand failed:", error);
         return {
           statusCode: 502,
+          headers: CORS_HEADERS,
           body: JSON.stringify({
             error: "Failed to delete conversation from storage.",
           }),
@@ -329,6 +397,7 @@ export const handler = async (event: any) => {
         console.error("DynamoDB DeleteCommand failed:", error);
         return {
           statusCode: 502,
+          headers: CORS_HEADERS,
           body: JSON.stringify({
             error: "Storage deleted, but failed to remove database index.",
           }),
@@ -337,19 +406,21 @@ export const handler = async (event: any) => {
 
       return {
         statusCode: 200,
+        headers: CORS_HEADERS,
         body: JSON.stringify({ status: "deleted", deletedId: conversationId }),
       };
     }
 
     return {
       statusCode: 404,
+      headers: CORS_HEADERS,
       body: JSON.stringify({ error: "Endpoint Not Found" }),
     };
   } catch (error) {
-    // Catch critical errors outside of requests
     console.error("Critical unexpected error:", error);
     return {
       statusCode: 500,
+      headers: CORS_HEADERS,
       body: JSON.stringify({ error: "Internal Server Error" }),
     };
   }

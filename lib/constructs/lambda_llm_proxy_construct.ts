@@ -1,4 +1,5 @@
 import * as cdk from "aws-cdk-lib";
+import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -12,6 +13,7 @@ export interface LambdaLlmProxyConstructProps {
    */
   monthlyLimit?: number;
   environment?: string;
+  userPool: cognito.IUserPool;
 }
 
 export default class LambdaLlmProxyConstruct extends Construct {
@@ -19,6 +21,8 @@ export default class LambdaLlmProxyConstruct extends Construct {
   public readonly transactionsTable: dynamodb.ITable;
   public readonly api: apigw.RestApi;
   public readonly v1Resource: apigw.IResource;
+  public readonly cognitoAuthorizer: apigw.CognitoUserPoolsAuthorizer;
+  public readonly userPool: cognito.IUserPool;
 
   constructor(
     scope: Construct,
@@ -28,6 +32,7 @@ export default class LambdaLlmProxyConstruct extends Construct {
     super(scope, id);
 
     const envSuffix = props.environment === "" ? "" : `-${props.environment}`;
+    this.userPool = props.userPool;
 
     this.monthlyUsageTable = dynamodb.Table.fromTableName(
       this,
@@ -106,7 +111,7 @@ export default class LambdaLlmProxyConstruct extends Construct {
       },
       defaultCorsPreflightOptions: {
         allowOrigins: apigw.Cors.ALL_ORIGINS,
-        allowMethods: ["GET", "POST", "OPTIONS"],
+        allowMethods: ["GET", "POST", "OPTIONS", "DELETE"],
         allowHeaders: [
           "Content-Type",
           "Authorization",
@@ -139,6 +144,14 @@ export default class LambdaLlmProxyConstruct extends Construct {
       },
     });
 
+    this.cognitoAuthorizer = new apigw.CognitoUserPoolsAuthorizer(
+      this,
+      "CognitoAuthorizer",
+      {
+        cognitoUserPools: [props.userPool],
+      },
+    );
+
     this.v1Resource = this.api.root.addResource("v1");
     const v1 = this.v1Resource;
 
@@ -152,7 +165,15 @@ export default class LambdaLlmProxyConstruct extends Construct {
 
     const usage = v1.addResource("usage");
     usage.addMethod("GET", usageLambdaIntegration, {
+      authorizationType: apigw.AuthorizationType.COGNITO,
+      authorizer: this.cognitoAuthorizer,
       apiKeyRequired: false,
+    });
+
+    inferenceUsageFn.addPermission("AllowApiGatewayInvoke", {
+      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+      action: "lambda:InvokeFunction",
+      sourceArn: this.api.arnForExecuteApi("*", "/*", "*"),
     });
 
     const bedrockProxyFunctionUrl = proxyFn.addFunctionUrl({

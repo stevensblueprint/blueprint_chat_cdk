@@ -10,6 +10,7 @@ import { Construct } from "constructs";
 import * as agentcore from "@aws-cdk/aws-bedrock-agentcore-alpha";
 
 export interface AgentCoreConstructProps {
+  environment: string;
   documentBucket: s3.IBucket;
   chatHistoryTable: dynamodb.ITable;
   modelId?: string;
@@ -22,6 +23,9 @@ export default class AgentCoreConstruct extends Construct {
 
   constructor(scope: Construct, id: string, props: AgentCoreConstructProps) {
     super(scope, id);
+
+    const envSuffix = props.environment === "" ? "" : `-${props.environment}`;
+    const bedrockSuffix = envSuffix.replace(/-/g, "_");
 
     const modelId =
       props.modelId ?? "us.anthropic.claude-3-5-haiku-20241022-v1:0";
@@ -102,7 +106,7 @@ export default class AgentCoreConstruct extends Construct {
     );
 
     const runtime = new agentcore.Runtime(this, "DocQARuntime", {
-      runtimeName: "DocumentQAAgent",
+      runtimeName: `DocumentQAAgent${bedrockSuffix}`,
       agentRuntimeArtifact: artifact,
       networkConfiguration:
         agentcore.RuntimeNetworkConfiguration.usingPublicNetwork(),

@@ -1,7 +1,7 @@
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as cdk from "aws-cdk-lib";
-import * as apigw from "aws-cdk-lib/aws-apigateway";
 import * as cognito from "aws-cdk-lib/aws-cognito";
+import * as apigw from "aws-cdk-lib/aws-apigateway";
 import { Construct } from "constructs";
 import LambdaLlmProxyConstruct from "../constructs/lambda_llm_proxy_construct";
 import WebhookLambdaConstruct from "../constructs/webhook_lamda_construct";
@@ -14,12 +14,19 @@ export interface BlueprintChatCdkStackProps extends cdk.StackProps {
   DISCORD_API_KEY: string;
   DRIVE_API_KEY: string;
   WIKI_API_KEY: string;
+  COGNITO_USER_POOL_ID: string;
 }
 export class BlueprintChatCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BlueprintChatCdkStackProps) {
     super(scope, id, props);
 
     const envSuffix = props.environment === "" ? "" : `-${props.environment}`;
+
+    const userPool = cognito.UserPool.fromUserPoolId(
+      this,
+      "UserPool",
+      props.COGNITO_USER_POOL_ID,
+    );
 
     const documentBucket = new s3.Bucket(this, "DocumentBucket", {
       bucketName: `blueprint-chat-documents-${cdk.Stack.of(this).account.toLowerCase()}${envSuffix}`,
@@ -39,6 +46,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     const lambdaLlmProxy = new LambdaLlmProxyConstruct(this, "LambdaLlmProxy", {
       monthlyLimit: 6.6,
       environment: props.environment,
+      userPool: userPool,
     });
 
     // Notion
@@ -85,6 +93,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     });
 
     const agentCore = new AgentCoreConstruct(this, "AgentCore", {
+      environment: props.environment,
       documentBucket: documentBucket,
       chatHistoryTable: chatHistoryConstruct.chatHistoryTable,
     });
@@ -96,11 +105,19 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         new apigw.LambdaIntegration(agentCore.agentProxyFn, { proxy: true }),
       );
 
-    lambdaLlmProxy.v1Resource.addResource("chat-history").addMethod(
+    const chatHistoryResource =
+      lambdaLlmProxy.v1Resource.addResource("chat-history");
+    const proxyResource = chatHistoryResource.addResource("{proxy+}");
+
+    proxyResource.addMethod(
       "ANY",
       new apigw.LambdaIntegration(chatHistoryConstruct.chatHistoryLambda, {
         proxy: true,
       }),
+      {
+        authorizationType: apigw.AuthorizationType.COGNITO,
+        authorizer: lambdaLlmProxy.cognitoAuthorizer,
+      },
     );
 
     new cdk.CfnOutput(this, "ChatHistoryApiUrl", {
