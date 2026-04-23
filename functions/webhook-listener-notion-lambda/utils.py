@@ -9,9 +9,11 @@ def get_safe_env(var_name: str) -> str:
     Returns:
         str: The value of the environment variable.
     Raises:
-        EnvironmentError: If the environment variable is not set.
+        EnvironmentError: If the environment variable is not set or is blank.
     """
     value = os.getenv(var_name)
-    if value is None:
-        raise EnvironmentError(f"Environment variable '{var_name}' is not set.")
+    if value is None or value.strip() == "":
+        raise EnvironmentError(
+            f"Environment variable '{var_name}' is not set or is blank."
+        )
     return value

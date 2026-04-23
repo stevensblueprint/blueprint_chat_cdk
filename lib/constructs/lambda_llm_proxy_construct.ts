@@ -1,11 +1,11 @@
 import * as cdk from "aws-cdk-lib";
 import * as cognito from "aws-cdk-lib/aws-cognito";
-import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
-import * as lambda from "aws-cdk-lib/aws-lambda";
-import * as iam from "aws-cdk-lib/aws-iam";
-import * as path from "path";
-import { Construct } from "constructs";
 import * as apigw from "aws-cdk-lib/aws-apigateway";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import { Construct } from "constructs";
+import * as path from "path";
 
 export interface LambdaLlmProxyConstructProps {
   /**
@@ -31,19 +31,30 @@ export default class LambdaLlmProxyConstruct extends Construct {
   ) {
     super(scope, id);
 
-    const envSuffix = props.environment === "" ? "" : `-${props.environment}`;
+    const rawEnvironment = props.environment?.trim().toLowerCase();
+    const normalizedEnvironment =
+      rawEnvironment === undefined ||
+      rawEnvironment === "" ||
+      rawEnvironment === "prod"
+        ? "prod"
+        : rawEnvironment;
+    const envSuffix =
+      normalizedEnvironment === "prod" ? "" : `-${normalizedEnvironment}`;
+    const monthlyUsageTableName = `Bedrock-Monthly-Usage${envSuffix}`;
+    const transactionsTableName = `Bedrock-Transactions${envSuffix}`;
+
     this.userPool = props.userPool;
 
     this.monthlyUsageTable = dynamodb.Table.fromTableName(
       this,
       "MonthlyUsageTable",
-      "Bedrock-Monthly-Usage",
+      monthlyUsageTableName,
     );
 
     this.transactionsTable = dynamodb.Table.fromTableName(
       this,
       "TransactionsTable",
-      "Bedrock-Transactions",
+      transactionsTableName,
     );
 
     const inferenceUsageFn = new lambda.Function(this, "InferenceUsageFn", {
@@ -56,7 +67,9 @@ export default class LambdaLlmProxyConstruct extends Construct {
       memorySize: 512,
       environment: {
         MONTHLY_USAGE_TABLE: this.monthlyUsageTable.tableName,
-        MONTHLY_LIMIT: String(props.monthlyLimit),
+        ...(props.monthlyLimit !== undefined
+          ? { MONTHLY_LIMIT: String(props.monthlyLimit) }
+          : {}),
       },
     });
 
@@ -72,7 +85,9 @@ export default class LambdaLlmProxyConstruct extends Construct {
         REGION: cdk.Stack.of(this).region,
         MONTHLY_USAGE_TABLE: this.monthlyUsageTable.tableName,
         TRANSACTIONS_TABLE: this.transactionsTable.tableName,
-        MONTHLY_LIMIT: String(props.monthlyLimit),
+        ...(props.monthlyLimit !== undefined
+          ? { MONTHLY_LIMIT: String(props.monthlyLimit) }
+          : {}),
       },
     });
 
@@ -88,8 +103,8 @@ export default class LambdaLlmProxyConstruct extends Construct {
         ],
         resources: [
           "arn:aws:bedrock:*:*:foundation-model/anthropic.*",
-          "arn:aws:dynamodb:*:*:table/Bedrock-Monthly-Usage",
-          "arn:aws:dynamodb:*:*:table/Bedrock-Transactions",
+          this.monthlyUsageTable.tableArn,
+          this.transactionsTable.tableArn,
         ],
       }),
     );
@@ -98,15 +113,15 @@ export default class LambdaLlmProxyConstruct extends Construct {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["dynamodb:GetItem", "dynamodb:Scan"],
-        resources: ["arn:aws:dynamodb:*:*:table/Bedrock-Monthly-Usage"],
+        resources: [this.monthlyUsageTable.tableArn],
       }),
     );
 
     this.api = new apigw.RestApi(this, "BedUsageApi", {
-      restApiName: "bedrock-usage-api",
+      restApiName: `bedrock-usage-api${envSuffix}`,
       description: "API Gateway for monthly usage statistics",
       deployOptions: {
-        stageName: "prod",
+        stageName: normalizedEnvironment,
         throttlingRateLimit: 20,
       },
       defaultCorsPreflightOptions: {
