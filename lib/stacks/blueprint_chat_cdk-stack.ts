@@ -26,10 +26,15 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       normalizedEnv === "" || normalizedEnv === "prod" ? "prod" : normalizedEnv;
     const envSuffix = environment === "prod" ? "" : `-${environment}`;
 
+    const cognitoUserPoolId = props.COGNITO_USER_POOL_ID.trim();
+    if (!cognitoUserPoolId) {
+      throw new Error("COGNITO_USER_POOL_ID is required");
+    }
+
     const userPool = cognito.UserPool.fromUserPoolId(
       this,
       "UserPool",
-      props.COGNITO_USER_POOL_ID,
+      cognitoUserPoolId,
     );
 
     const documentBucket = new s3.Bucket(this, "DocumentBucket", {

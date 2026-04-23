@@ -145,7 +145,7 @@ export default class LambdaLlmProxyConstruct extends Construct {
         "Access-Control-Allow-Origin": "'*'",
         "Access-Control-Allow-Headers":
           "'Content-Type,Authorization,x-api-key,Accept,Origin,X-Requested-With'",
-        "Access-Control-Allow-Methods": "'GET,POST,OPTIONS'",
+        "Access-Control-Allow-Methods": "'GET,POST,OPTIONS,DELETE'",
       },
     });
 
@@ -155,7 +155,7 @@ export default class LambdaLlmProxyConstruct extends Construct {
         "Access-Control-Allow-Origin": "'*'",
         "Access-Control-Allow-Headers":
           "'Content-Type,Authorization,x-api-key,Accept,Origin,X-Requested-With'",
-        "Access-Control-Allow-Methods": "'GET,POST,OPTIONS'",
+        "Access-Control-Allow-Methods": "'GET,POST,OPTIONS,DELETE'",
       },
     });
 
