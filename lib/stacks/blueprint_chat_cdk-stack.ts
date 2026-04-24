@@ -7,6 +7,7 @@ import WebhookLambdaConstruct from "../constructs/webhook_lamda_construct";
 import { IngestionQueueConstruct } from "../constructs/ingestion_queue_construct";
 import ChatHistoryConstruct from "../constructs/chat-history-construct";
 import AgentCoreConstruct from "../constructs/agentcore-construct";
+import { IngestionWorkerConstruct } from "../constructs/ingestion_worker_construct";
 
 export interface BlueprintChatCdkStackProps extends cdk.StackProps {
   environment: string;
@@ -14,6 +15,7 @@ export interface BlueprintChatCdkStackProps extends cdk.StackProps {
   DISCORD_API_KEY: string;
   DRIVE_API_KEY: string;
   WIKI_API_KEY: string;
+  WIKI_BASE_URL: string;
 }
 export class BlueprintChatCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BlueprintChatCdkStackProps) {
@@ -111,6 +113,15 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     new cdk.CfnOutput(this, "AgentStreamingUrl", {
       value: agentCore.streamingUrl.url,
       exportName: `AgentStreamingUrl${envSuffix}`,
+    });
+
+    new IngestionWorkerConstruct(this, "IngestionWorker", {
+      queue: ingestion.queue,
+      documentBucket,
+      notionApiKey: props.NOTION_API_KEY,
+      driveApiKey: props.DRIVE_API_KEY,
+      wikiApiKey: props.WIKI_API_KEY,
+      wikiBaseUrl: props.WIKI_BASE_URL,
     });
   }
 }

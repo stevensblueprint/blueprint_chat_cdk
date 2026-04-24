@@ -15,6 +15,7 @@ export interface AgentCoreConstructProps {
   chatHistoryTable: dynamodb.ITable;
   environment?: string;
   modelId?: string;
+  environment?: string;
 }
 
 export default class AgentCoreConstruct extends Construct {
