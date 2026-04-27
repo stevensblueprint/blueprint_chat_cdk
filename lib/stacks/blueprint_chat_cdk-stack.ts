@@ -88,8 +88,8 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       "ChatHistoryConstruct",
       {
         environment,
-        s3BucketName: `blueprint-chat-history${envSuffix}`,
-        chatHistoryTableName: `ChatHistory${envSuffix}`,
+        s3BucketName: `blueprint-chat-history`,
+        chatHistoryTableName: `ChatHistory`,
       },
     );
 

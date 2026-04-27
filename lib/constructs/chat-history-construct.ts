@@ -19,7 +19,15 @@ export default class ChatHistoryConstruct extends Construct {
   constructor(scope: Construct, id: string, props: ChatHistoryConstructProps) {
     super(scope, id);
 
-    const envSuffix = props.environment === "" ? "" : `-${props.environment}`;
+    const rawEnvironment = props.environment?.trim().toLowerCase();
+    const normalizedEnvironment =
+      rawEnvironment === undefined ||
+      rawEnvironment === "" ||
+      rawEnvironment === "prod"
+        ? "prod"
+        : rawEnvironment;
+    const envSuffix =
+      normalizedEnvironment === "prod" ? "" : `-${normalizedEnvironment}`;
 
     // S3 Bucket Data Model
     this.s3Bucket = new s3.Bucket(this, "ChatHistoryBucket", {
