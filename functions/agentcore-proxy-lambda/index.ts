@@ -53,7 +53,7 @@ function findStream(response: any): AsyncIterable<Uint8Array> | null {
 
 async function invokeAgent(event: any) {
   const body = JSON.parse(event.body || "{}");
-  const { prompt, conversationId } = body;
+  const { prompt, conversationId, userId } = body;
 
   if (!prompt) {
     throw new Error("prompt is required");
@@ -61,6 +61,7 @@ async function invokeAgent(event: any) {
 
   const payload: Record<string, string> = { prompt };
   if (conversationId) payload.conversationId = conversationId;
+  if (userId) payload.userId = userId;
 
   console.log(
     `Invoking agent runtime — ARN: ${AGENT_RUNTIME_ARN}, endpoint: ${AGENT_RUNTIME_ENDPOINT}, conversationId: ${conversationId}`,

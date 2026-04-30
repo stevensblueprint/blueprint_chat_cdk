@@ -13,9 +13,9 @@ import * as path from "path";
 export interface AgentCoreConstructProps {
   documentBucket: s3.IBucket;
   chatHistoryTable: dynamodb.ITable;
+  chatHistoryBucket: s3.IBucket;
   environment?: string;
   modelId?: string;
-  environment?: string;
 }
 
 export default class AgentCoreConstruct extends Construct {
@@ -170,6 +170,7 @@ export default class AgentCoreConstruct extends Construct {
       environmentVariables: {
         DOCUMENT_BUCKET: props.documentBucket.bucketName,
         CHAT_HISTORY_TABLE: props.chatHistoryTable.tableName,
+        CHAT_HISTORY_BUCKET: props.chatHistoryBucket.bucketName,
         BEDROCK_MODEL_ID: modelId,
         EMBEDDING_MODEL_ID: embeddingModelId,
         VECTOR_BUCKET_NAME: vectorBucketName,
@@ -184,6 +185,7 @@ export default class AgentCoreConstruct extends Construct {
     this.runtimeArn = runtime.agentRuntimeArn;
 
     props.chatHistoryTable.grantReadWriteData(runtime);
+    props.chatHistoryBucket.grantReadWrite(runtime);
 
     const baseModelId = modelId.replace(/^[a-z]+\./, "");
 

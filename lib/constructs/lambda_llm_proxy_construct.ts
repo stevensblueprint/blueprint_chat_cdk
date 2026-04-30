@@ -1,4 +1,5 @@
 import * as cdk from "aws-cdk-lib";
+import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as apigw from "aws-cdk-lib/aws-apigateway";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as iam from "aws-cdk-lib/aws-iam";
@@ -11,8 +12,8 @@ export interface LambdaLlmProxyConstructProps {
    * The monthly limit for usage in USD.
    */
   monthlyLimit?: number;
-
   environment?: string;
+  userPool: cognito.IUserPool;
 }
 
 export default class LambdaLlmProxyConstruct extends Construct {
@@ -20,6 +21,8 @@ export default class LambdaLlmProxyConstruct extends Construct {
   public readonly transactionsTable: dynamodb.ITable;
   public readonly api: apigw.RestApi;
   public readonly v1Resource: apigw.IResource;
+  public readonly cognitoAuthorizer: apigw.CognitoUserPoolsAuthorizer;
+  public readonly userPool: cognito.IUserPool;
 
   constructor(
     scope: Construct,
@@ -35,51 +38,24 @@ export default class LambdaLlmProxyConstruct extends Construct {
       rawEnvironment === "prod"
         ? "prod"
         : rawEnvironment;
-
-    // API Gateway stage names must match [a-zA-Z0-9_-]{1,128}.
-    if (!/^[a-zA-Z0-9_-]{1,128}$/.test(normalizedEnvironment)) {
-      throw new Error(
-        `Invalid API Gateway stage name "${normalizedEnvironment}". ` +
-          `Stage names must match [a-zA-Z0-9_-]{1,128}.`,
-      );
-    }
-
     const envSuffix =
       normalizedEnvironment === "prod" ? "" : `-${normalizedEnvironment}`;
     const monthlyUsageTableName = `Bedrock-Monthly-Usage${envSuffix}`;
     const transactionsTableName = `Bedrock-Transactions${envSuffix}`;
 
-    if (normalizedEnvironment === "prod") {
-      this.monthlyUsageTable = dynamodb.Table.fromTableName(
-        this,
-        "MonthlyUsageTable",
-        monthlyUsageTableName,
-      );
-      this.transactionsTable = dynamodb.Table.fromTableName(
-        this,
-        "TransactionsTable",
-        transactionsTableName,
-      );
-    } else {
-      this.monthlyUsageTable = new dynamodb.Table(this, "MonthlyUsageTable", {
-        tableName: monthlyUsageTableName,
-        partitionKey: {
-          name: "userArn",
-          type: dynamodb.AttributeType.STRING,
-        },
-        sortKey: { name: "month_year", type: dynamodb.AttributeType.STRING },
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      });
-      this.transactionsTable = new dynamodb.Table(this, "TransactionsTable", {
-        tableName: transactionsTableName,
-        partitionKey: {
-          name: "userArn",
-          type: dynamodb.AttributeType.STRING,
-        },
-        sortKey: { name: "timestamp", type: dynamodb.AttributeType.STRING },
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      });
-    }
+    this.userPool = props.userPool;
+
+    this.monthlyUsageTable = dynamodb.Table.fromTableName(
+      this,
+      "MonthlyUsageTable",
+      monthlyUsageTableName,
+    );
+
+    this.transactionsTable = dynamodb.Table.fromTableName(
+      this,
+      "TransactionsTable",
+      transactionsTableName,
+    );
 
     const inferenceUsageFn = new lambda.Function(this, "InferenceUsageFn", {
       runtime: lambda.Runtime.PYTHON_3_10,
@@ -150,7 +126,7 @@ export default class LambdaLlmProxyConstruct extends Construct {
       },
       defaultCorsPreflightOptions: {
         allowOrigins: apigw.Cors.ALL_ORIGINS,
-        allowMethods: ["GET", "POST", "OPTIONS"],
+        allowMethods: ["GET", "POST", "OPTIONS", "DELETE"],
         allowHeaders: [
           "Content-Type",
           "Authorization",
@@ -169,7 +145,7 @@ export default class LambdaLlmProxyConstruct extends Construct {
         "Access-Control-Allow-Origin": "'*'",
         "Access-Control-Allow-Headers":
           "'Content-Type,Authorization,x-api-key,Accept,Origin,X-Requested-With'",
-        "Access-Control-Allow-Methods": "'GET,POST,OPTIONS'",
+        "Access-Control-Allow-Methods": "'GET,POST,OPTIONS,DELETE'",
       },
     });
 
@@ -179,9 +155,17 @@ export default class LambdaLlmProxyConstruct extends Construct {
         "Access-Control-Allow-Origin": "'*'",
         "Access-Control-Allow-Headers":
           "'Content-Type,Authorization,x-api-key,Accept,Origin,X-Requested-With'",
-        "Access-Control-Allow-Methods": "'GET,POST,OPTIONS'",
+        "Access-Control-Allow-Methods": "'GET,POST,OPTIONS,DELETE'",
       },
     });
+
+    this.cognitoAuthorizer = new apigw.CognitoUserPoolsAuthorizer(
+      this,
+      "CognitoAuthorizer",
+      {
+        cognitoUserPools: [props.userPool],
+      },
+    );
 
     this.v1Resource = this.api.root.addResource("v1");
     const v1 = this.v1Resource;
@@ -196,6 +180,8 @@ export default class LambdaLlmProxyConstruct extends Construct {
 
     const usage = v1.addResource("usage");
     usage.addMethod("GET", usageLambdaIntegration, {
+      authorizationType: apigw.AuthorizationType.COGNITO,
+      authorizer: this.cognitoAuthorizer,
       apiKeyRequired: false,
     });
 
