@@ -13,7 +13,6 @@ import * as path from "path";
 export interface AgentCoreConstructProps {
   documentBucket: s3.IBucket;
   chatHistoryTable: dynamodb.ITable;
-  environment?: string;
   modelId?: string;
   environment?: string;
 }
