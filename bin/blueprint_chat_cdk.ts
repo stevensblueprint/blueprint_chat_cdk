@@ -32,6 +32,7 @@ new BlueprintChatCdkStack(app, `blueprint-chat-cdk${envSuffix}`, {
   DISCORD_API_KEY: process.env.DISCORD_API_KEY || "",
   DRIVE_API_KEY: process.env.DRIVE_API_KEY || "",
   WIKI_API_KEY: process.env.WIKI_API_KEY || "",
+  WIKI_BASE_URL: process.env.WIKI_BASE_URL || "",
   COGNITO_USER_POOL_ID: process.env.COGNITO_USER_POOL_ID || "",
 });
 
