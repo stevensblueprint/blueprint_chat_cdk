@@ -53,7 +53,7 @@ export default class LambdaLlmProxyConstruct extends Construct {
     const transactionsTableName = `Bedrock-Transactions${envSuffix}`;
 
     this.userPool = props.userPool;
-    
+
     if (normalizedEnvironment === "prod") {
       this.monthlyUsageTable = dynamodb.Table.fromTableName(
         this,
