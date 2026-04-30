@@ -1,5 +1,6 @@
 import * as cdk from "aws-cdk-lib";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as apigw from "aws-cdk-lib/aws-apigateway";
 import { Construct } from "constructs";
 import LambdaLlmProxyConstruct from "../constructs/lambda_llm_proxy_construct";
@@ -16,6 +17,7 @@ export interface BlueprintChatCdkStackProps extends cdk.StackProps {
   DRIVE_API_KEY: string;
   WIKI_API_KEY: string;
   WIKI_BASE_URL: string;
+  COGNITO_USER_POOL_ID: string;
 }
 export class BlueprintChatCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BlueprintChatCdkStackProps) {
@@ -26,6 +28,17 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       normalizedEnv === "" || normalizedEnv === "prod" ? "prod" : normalizedEnv;
     const envSuffix = environment === "prod" ? "" : `-${environment}`;
 
+    const cognitoUserPoolId = props.COGNITO_USER_POOL_ID.trim();
+    if (!cognitoUserPoolId) {
+      throw new Error("COGNITO_USER_POOL_ID is required");
+    }
+
+    const userPool = cognito.UserPool.fromUserPoolId(
+      this,
+      "UserPool",
+      cognitoUserPoolId,
+    );
+
     const documentBucket = new s3.Bucket(this, "DocumentBucket", {
       bucketName: `blueprint-chat-documents-${cdk.Stack.of(this).account.toLowerCase()}${envSuffix}`,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
@@ -34,6 +47,7 @@ export class BlueprintChatCdkStack extends cdk.Stack {
     const lambdaLlmProxy = new LambdaLlmProxyConstruct(this, "LambdaLlmProxy", {
       monthlyLimit: 6.6,
       environment,
+      userPool: userPool,
     });
 
     const ingestion = new IngestionQueueConstruct(this, "Ingestion");
@@ -76,8 +90,8 @@ export class BlueprintChatCdkStack extends cdk.Stack {
       "ChatHistoryConstruct",
       {
         environment,
-        s3BucketName: `blueprint-chat-history${envSuffix}`,
-        chatHistoryTableName: `ChatHistory${envSuffix}`,
+        s3BucketName: `blueprint-chat-history`,
+        chatHistoryTableName: `ChatHistory`,
       },
     );
 
@@ -104,6 +118,26 @@ export class BlueprintChatCdkStack extends cdk.Stack {
         "POST",
         new apigw.LambdaIntegration(agentCore.agentProxyFn, { proxy: true }),
       );
+
+    const chatHistoryResource =
+      lambdaLlmProxy.v1Resource.addResource("chat-history");
+    const proxyResource = chatHistoryResource.addResource("{proxy+}");
+
+    proxyResource.addMethod(
+      "ANY",
+      new apigw.LambdaIntegration(chatHistoryConstruct.chatHistoryLambda, {
+        proxy: true,
+      }),
+      {
+        authorizationType: apigw.AuthorizationType.COGNITO,
+        authorizer: lambdaLlmProxy.cognitoAuthorizer,
+      },
+    );
+
+    new cdk.CfnOutput(this, "ChatHistoryApiUrl", {
+      value: `${lambdaLlmProxy.api.url}v1/chat-history`,
+      exportName: `ChatHistoryApiUrl${envSuffix}`,
+    });
 
     new cdk.CfnOutput(this, "AgentApiUrl", {
       value: `${lambdaLlmProxy.api.url}v1/agent`,

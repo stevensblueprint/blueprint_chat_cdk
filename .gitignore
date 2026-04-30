@@ -11,3 +11,6 @@ cdk.out
 
 # Environment files
 .env
+
+# DS Store files
+.DS_Store
