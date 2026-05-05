@@ -33,4 +33,6 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: CDK Deploy
+        env:
+          COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID }}
         run: npx cdk deploy --all --require-approval never
