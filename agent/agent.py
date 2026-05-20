@@ -216,7 +216,7 @@ async def invocations(raw_request: Request):
     if safe_doc_context:
         system_prompt += f"\n<documents>\n{safe_doc_context}\n</documents>"
     else:
-        system_prompt += f"\n<documents>\nNo relevant documents were found for this query.\n</documents>"
+        system_prompt += "\n<documents>\nNo relevant documents were found for this query.\n</documents>"
 
     messages.append({"role": "user", "content": [{"text": request.prompt}]})
     logger.debug(
