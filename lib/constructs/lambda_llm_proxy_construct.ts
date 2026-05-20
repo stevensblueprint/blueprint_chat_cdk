@@ -45,17 +45,37 @@ export default class LambdaLlmProxyConstruct extends Construct {
 
     this.userPool = props.userPool;
 
-    this.monthlyUsageTable = dynamodb.Table.fromTableName(
-      this,
-      "MonthlyUsageTable",
-      monthlyUsageTableName,
-    );
-
-    this.transactionsTable = dynamodb.Table.fromTableName(
-      this,
-      "TransactionsTable",
-      transactionsTableName,
-    );
+    if (normalizedEnvironment === "prod") {
+      this.monthlyUsageTable = dynamodb.Table.fromTableName(
+        this,
+        "MonthlyUsageTable",
+        monthlyUsageTableName,
+      );
+      this.transactionsTable = dynamodb.Table.fromTableName(
+        this,
+        "TransactionsTable",
+        transactionsTableName,
+      );
+    } else {
+      this.monthlyUsageTable = new dynamodb.Table(this, "MonthlyUsageTable", {
+        tableName: monthlyUsageTableName,
+        partitionKey: {
+          name: "userArn",
+          type: dynamodb.AttributeType.STRING,
+        },
+        sortKey: { name: "month_year", type: dynamodb.AttributeType.STRING },
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+      this.transactionsTable = new dynamodb.Table(this, "TransactionsTable", {
+        tableName: transactionsTableName,
+        partitionKey: {
+          name: "userArn",
+          type: dynamodb.AttributeType.STRING,
+        },
+        sortKey: { name: "timestamp", type: dynamodb.AttributeType.STRING },
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+    }
 
     const inferenceUsageFn = new lambda.Function(this, "InferenceUsageFn", {
       runtime: lambda.Runtime.PYTHON_3_10,

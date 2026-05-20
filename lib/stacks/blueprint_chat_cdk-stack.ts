@@ -15,6 +15,7 @@ export interface BlueprintChatCdkStackProps extends cdk.StackProps {
   DISCORD_API_KEY: string;
   DRIVE_API_KEY: string;
   WIKI_API_KEY: string;
+  WIKI_BASE_URL: string;
   COGNITO_USER_POOL_ID: string;
 }
 export class BlueprintChatCdkStack extends cdk.Stack {
