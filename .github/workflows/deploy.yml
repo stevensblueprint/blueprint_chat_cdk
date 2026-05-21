@@ -26,6 +26,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Chat History Lambda dependencies
+        run: npm ci
+        working-directory: functions/chat-history-lambda
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:

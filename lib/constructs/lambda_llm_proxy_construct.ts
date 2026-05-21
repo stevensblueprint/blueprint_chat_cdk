@@ -38,15 +38,6 @@ export default class LambdaLlmProxyConstruct extends Construct {
       rawEnvironment === "prod"
         ? "prod"
         : rawEnvironment;
-
-    // API Gateway stage names must match [a-zA-Z0-9_-]{1,128}.
-    if (!/^[a-zA-Z0-9_-]{1,128}$/.test(normalizedEnvironment)) {
-      throw new Error(
-        `Invalid API Gateway stage name "${normalizedEnvironment}". ` +
-          `Stage names must match [a-zA-Z0-9_-]{1,128}.`,
-      );
-    }
-
     const envSuffix =
       normalizedEnvironment === "prod" ? "" : `-${normalizedEnvironment}`;
     const monthlyUsageTableName = `Bedrock-Monthly-Usage${envSuffix}`;
